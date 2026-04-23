@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { apiGetAdminExams, apiDeleteExam, apiUpdateExam } from "../../api";
-import { Plus, Pencil, Trash2, Copy, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Eye, EyeOff, Loader2, FileText, Clock, Users as UsersIcon } from "lucide-react";
 
 export default function AdminExams() {
   const [exams, setExams] = useState([]);
@@ -19,7 +19,8 @@ export default function AdminExams() {
 
   useEffect(load, []);
 
-  const handleToggleStatus = async (exam) => {
+  const handleToggleStatus = async (exam, e) => {
+    e.stopPropagation();
     const newStatus = exam.status === "published" ? "draft" : "published";
     try {
       await apiUpdateExam(exam.id, { status: newStatus });
@@ -29,7 +30,8 @@ export default function AdminExams() {
     }
   };
 
-  const handleDelete = async (examId) => {
+  const handleDelete = async (examId, e) => {
+    e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this exam?")) return;
     try {
       await apiDeleteExam(examId);
@@ -39,7 +41,8 @@ export default function AdminExams() {
     }
   };
 
-  const copyCode = (code) => {
+  const copyCode = (code, e) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(code);
   };
 
@@ -51,7 +54,7 @@ export default function AdminExams() {
     };
     const labels = { draft: "Draft", published: "Published", archived: "Archived" };
     return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || "bg-gray-100 text-gray-600"}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${map[status] || "bg-gray-100 text-gray-600"}`}>
         {labels[status] || status}
       </span>
     );
@@ -71,78 +74,111 @@ export default function AdminExams() {
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          {loading ? (
-            <div className="p-6 text-center text-gray-400">Loading...</div>
-          ) : exams.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-400 text-sm">No exams yet. Click "New Exam" to create one.</p>
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                  <th className="px-6 py-3 text-left">Title</th>
-                  <th className="px-6 py-3 text-left">Access Code</th>
-                  <th className="px-6 py-3 text-left">Questions</th>
-                  <th className="px-6 py-3 text-left">Duration</th>
-                  <th className="px-6 py-3 text-left">Submissions</th>
-                  <th className="px-6 py-3 text-left">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {exams.map((exam) => (
-                  <tr key={exam.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-gray-900 text-sm">{exam.title}</p>
-                      {exam.description && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{exam.description}</p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        <code className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-mono">
-                          {exam.access_code}
-                        </code>
-                        <button onClick={() => copyCode(exam.access_code)} className="text-gray-400 hover:text-gray-700">
-                          <Copy size={14} />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{exam.total_questions}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{exam.duration_minutes} min</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{exam.submission_count}</td>
-                    <td className="px-6 py-4">{statusBadge(exam.status)}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleToggleStatus(exam)}
-                          title={exam.status === "published" ? "Unpublish" : "Publish"}
-                          className="text-gray-400 hover:text-green-600 transition p-1"
-                        >
-                          {exam.status === "published" ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                        <button
-                          onClick={() => navigate(`/admin/exams/${exam.id}/edit`)}
-                          className="text-gray-400 hover:text-blue-600 transition p-1"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(exam.id)}
-                          className="text-gray-400 hover:text-red-600 transition p-1"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+          </div>
+        ) : exams.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <FileText className="mx-auto w-12 h-12 text-gray-400 mb-4" />
+            <p className="text-gray-600 mb-4">No exams yet</p>
+            <button
+              onClick={() => navigate("/admin/exams/new")}
+              className="text-red-600 hover:text-red-700 font-medium"
+            >
+              Create your first exam
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {exams.map((exam) => (
+              <div
+                key={exam.id}
+                onClick={() => navigate(`/admin/exams/${exam.id}/edit`)}
+                className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-red-200 transition cursor-pointer"
+              >
+                {/* Header with title and actions */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 pr-2">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">
+                      {exam.title}
+                    </h3>
+                    {exam.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {exam.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={(e) => handleToggleStatus(exam, e)}
+                      title={exam.status === "published" ? "Unpublish" : "Publish"}
+                      className="p-1.5 hover:bg-green-100 rounded transition"
+                    >
+                      {exam.status === "published" ? 
+                        <EyeOff className="w-4 h-4 text-green-600" /> : 
+                        <Eye className="w-4 h-4 text-gray-400" />
+                      }
+                    </button>
+                    <button
+                      onClick={(e) => handleDelete(exam.id, e)}
+                      className="p-1.5 hover:bg-red-100 rounded transition"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Access Code */}
+                <div className="mb-3">
+                  <div className="flex items-center space-x-2">
+                    <code className="bg-red-50 text-red-700 px-3 py-1 rounded-lg text-sm font-mono font-medium">
+                      {exam.access_code}
+                    </code>
+                    <button 
+                      onClick={(e) => copyCode(exam.access_code, e)} 
+                      className="p-1 hover:bg-gray-100 rounded transition"
+                      title="Copy code"
+                    >
+                      <Copy className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="flex flex-col">
+                    <div className="flex items-center space-x-1 text-gray-500 mb-1">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="text-xs">Questions</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">{exam.total_questions}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center space-x-1 text-gray-500 mb-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span className="text-xs">Duration</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">{exam.duration_minutes}m</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center space-x-1 text-gray-500 mb-1">
+                      <UsersIcon className="w-3.5 h-3.5" />
+                      <span className="text-xs">Submissions</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">{exam.submission_count}</span>
+                  </div>
+                </div>
+
+                {/* Footer with status */}
+                <div className="pt-3 border-t border-gray-100">
+                  {statusBadge(exam.status)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );
