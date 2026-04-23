@@ -139,3 +139,34 @@ export async function apiAddStudentToClassroom(classroomId, userId) {
 export async function apiRemoveStudentFromClassroom(classroomId, userId) {
   return request(`/api/admin/classrooms/${classroomId}/students/${userId}`, { method: "DELETE" });
 }
+
+// ─── Exam Logs ───────────────────────────────────────────────────────────────
+
+export async function apiLogExamEvent(examId, eventType, eventData = {}, submissionId = null) {
+  return request("/api/exams/log", {
+    method: "POST",
+    body: JSON.stringify({ examId, eventType, eventData, submissionId }),
+  });
+}
+
+export async function apiGetExamLogs(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.examId) params.append("examId", filters.examId);
+  if (filters.userId) params.append("userId", filters.userId);
+  if (filters.eventType) params.append("eventType", filters.eventType);
+  if (filters.startDate) params.append("startDate", filters.startDate);
+  if (filters.endDate) params.append("endDate", filters.endDate);
+  if (filters.limit) params.append("limit", filters.limit);
+  
+  const query = params.toString();
+  return request(`/api/admin/logs${query ? `?${query}` : ""}`);
+}
+
+export async function apiGetExamLogStats(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.examId) params.append("examId", filters.examId);
+  if (filters.userId) params.append("userId", filters.userId);
+  
+  const query = params.toString();
+  return request(`/api/admin/logs/stats${query ? `?${query}` : ""}`);
+}

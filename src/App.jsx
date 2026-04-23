@@ -11,6 +11,7 @@ import AdminSubmissionDetail from "./pages/Admin/SubmissionDetail";
 import AdminUsers from "./pages/Admin/Users";
 import AdminClassrooms from "./pages/Admin/Classrooms";
 import ClassroomDetail from "./pages/Admin/ClassroomDetail";
+import ExamLogs from "./pages/Admin/ExamLogs";
 
 import StudentDashboard from "./pages/Student/Dashboard";
 import ExamCodeEntry from "./pages/Student/ExamCodeEntry";
@@ -76,6 +77,10 @@ function App() {
           <Route
             path="/admin/classrooms/:id"
             element={<PrivateRoute role="admin"><ClassroomDetail /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/logs"
+            element={<PrivateRoute role="admin"><ExamLogs /></PrivateRoute>}
           />
 
           {/* Student */}

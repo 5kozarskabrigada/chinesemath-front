@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { apiGetExamQuestions, apiSubmitExam } from "../../api";
+import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
 import { renderMath } from "../../utils/math";
 import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
 
@@ -16,6 +16,14 @@ export default function ExamPlayer() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const startTimeRef = useRef(Date.now());
+  const hasLoggedStartRef = useRef(false);
+
+  // Log exam event helper
+  const logEvent = useCallback((eventType, eventData = {}) => {
+    if (examId) {
+      apiLogExamEvent(examId, eventType, eventData).catch(console.error);
+    }
+  }, [examId]);
 
   useEffect(() => {
     apiGetExamQuestions(examId)
@@ -23,10 +31,63 @@ export default function ExamPlayer() {
         setExam(e);
         setQuestions(qs);
         setTimeLeft(e.duration_minutes * 60);
+        
+        // Log exam started only once
+        if (!hasLoggedStartRef.current) {
+          logEvent("exam_started", { examTitle: e.title, questionCount: qs.length });
+          hasLoggedStartRef.current = true;
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [examId]);
+  }, [examId, logEvent]);
+
+  // Fullscreen detection
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        logEvent("fullscreen_enter");
+      } else {
+        logEvent("fullscreen_exit", { timestamp: new Date().toISOString() });
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [logEvent]);
+
+  // Window blur/focus detection
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      logEvent("window_blur", { timestamp: new Date().toISOString() });
+    };
+
+    const handleWindowFocus = () => {
+      logEvent("window_focus", { timestamp: new Date().toISOString() });
+    };
+
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [logEvent]);
+
+  // Tab visibility detection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        logEvent("tab_hidden", { timestamp: new Date().toISOString() });
+      } else {
+        logEvent("tab_visible", { timestamp: new Date().toISOString() });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [logEvent]);
 
   // Countdown timer
   useEffect(() => {
@@ -59,13 +120,22 @@ export default function ExamPlayer() {
       const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
       try {
         await apiSubmitExam(examId, answers, timeSpent);
+        
+        // Log exam submission
+        logEvent("exam_submitted", { 
+          timeSpent, 
+          answeredCount: Object.keys(answers).length,
+          totalQuestions: questions.length,
+          autoSubmit 
+        });
+        
         navigate(`/student/exam/${examId}/result`);
       } catch (err) {
         setError(err.message);
         setSubmitting(false);
       }
     },
-    [answers, examId, navigate, questions, submitting]
+    [answers, examId, navigate, questions, submitting, logEvent]
   );
 
   const formatTime = (sec) => {
