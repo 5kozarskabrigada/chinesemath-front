@@ -43,7 +43,23 @@ export default function AdminExams() {
 
   const copyCode = (code, e) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(code);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).catch(err => console.error('Clipboard error:', err));
+    } else {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = code;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } catch (err) {
+        console.error('Fallback copy error:', err);
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const statusBadge = (status) => {
