@@ -293,6 +293,24 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
               >
                 ⊥
               </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\log_{}')}
+                disabled={isDisabled}
+                title="Log base"
+                isMath
+              >
+                log<sub>b</sub>
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\overrightarrow{}')}
+                disabled={isDisabled}
+                title="Vector Arrow Over"
+                isMath
+              >
+                <span style={{textDecoration: 'overline', fontWeight: 'bold'}}>→</span>OP
+              </ToolbarButton>
             </div>
           </>
         )}
