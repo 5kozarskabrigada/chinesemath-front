@@ -16,7 +16,10 @@ export default function AdminUsers() {
 
   const load = () => {
     setLoading(true);
-    apiGetUsers().then(setUsers).catch(console.error).finally(() => setLoading(false));
+    apiGetUsers()
+      .then(users => setUsers(users.filter(u => !u.is_deleted)))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);

@@ -21,6 +21,7 @@ const navItems = [
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/classrooms", label: "Classrooms", icon: School },
   { to: "/admin/logs", label: "Exam Logs", icon: Activity },
+  { to: "/admin/recycle-bin", label: "Recycle Bin", icon: PanelLeftClose }, // Added
 ];
 
 export default function AdminLayout({ children }) {

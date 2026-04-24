@@ -12,6 +12,7 @@ import AdminUsers from "./pages/Admin/Users";
 import AdminClassrooms from "./pages/Admin/Classrooms";
 import ClassroomDetail from "./pages/Admin/ClassroomDetail";
 import ExamLogs from "./pages/Admin/ExamLogs";
+import RecycleBin from "./pages/Admin/RecycleBin";
 
 import StudentDashboard from "./pages/Student/Dashboard";
 import ExamCodeEntry from "./pages/Student/ExamCodeEntry";
@@ -81,6 +82,10 @@ function App() {
           <Route
             path="/admin/logs"
             element={<PrivateRoute role="admin"><ExamLogs /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/recycle-bin"
+            element={<PrivateRoute role="admin"><RecycleBin /></PrivateRoute>}
           />
 
           {/* Student */}

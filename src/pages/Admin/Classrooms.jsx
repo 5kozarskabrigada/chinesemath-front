@@ -20,7 +20,7 @@ export default function AdminClassrooms() {
   const load = () => {
     setLoading(true);
     apiGetClassrooms()
-      .then(setClassrooms)
+      .then(classrooms => setClassrooms(classrooms.filter(c => !c.is_deleted)))
       .catch(console.error)
       .finally(() => setLoading(false));
   };

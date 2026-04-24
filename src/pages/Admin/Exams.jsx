@@ -12,7 +12,7 @@ export default function AdminExams() {
   const load = () => {
     setLoading(true);
     apiGetAdminExams()
-      .then(setExams)
+      .then(exams => setExams(exams.filter(e => !e.is_deleted)))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
