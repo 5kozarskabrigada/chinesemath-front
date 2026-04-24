@@ -54,19 +54,27 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
   const insertMath = (cmd, useWrite = false) => {
     const activeMathField = getActiveMathField();
     if (activeMathField) {
-      if (useWrite) {
-        // Use .write() for simple symbols
+      // Special handling for different commands
+      if (cmd === '\\sqrt[') {
+        // Type nth root - this creates the proper structure
+        activeMathField.typedText('\\sqrt');
+        activeMathField.keystroke('Left');
+        activeMathField.typedText('[');
+      } else if (useWrite) {
+        // Use .write() for simple symbols that render immediately
         activeMathField.write(cmd);
       } else {
         // Use .cmd() for commands that open structures
         activeMathField.cmd(cmd);
       }
-      // Keep focus immediately without delay
-      activeMathField.focus();
+      // Immediately refocus to prevent blur
+      requestAnimationFrame(() => {
+        activeMathField.focus();
+      });
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
-        attrs: { latex: cmd.replace(/^\\/,'').replace('nthroot', '') }
+        attrs: { latex: cmd.replace(/^\\/,'').replace('sqrt[', '').replace('nthroot', '') }
       }).run();
     }
   };

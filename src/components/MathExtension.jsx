@@ -53,10 +53,10 @@ const MathComponent = ({ node, updateAttributes }) => {
               className="border border-indigo-500 shadow-lg !min-h-[40px] !p-1 text-[1.1rem]"
               onInit={(mf) => {
                   mathFieldRef.current = mf;
+                  setGlobalActiveMathField(mf);
                   setTimeout(() => {
                       mf.focus();
-                      setGlobalActiveMathField(mf);
-                  }, 50);
+                  }, 10);
               }}
             />
           </div>

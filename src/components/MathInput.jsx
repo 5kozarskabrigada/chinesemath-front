@@ -7,6 +7,7 @@ addStyles();
 const MathInput = ({ value, onChange, onInit, className = '' }) => {
   const mathFieldRef = useRef(null);
   const isInitializedRef = useRef(false);
+  const preventBlurRef = useRef(false);
 
   useEffect(() => {
     if (onInit && mathFieldRef.current && !isInitializedRef.current) {
@@ -15,9 +16,36 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
     }
   }, [onInit]);
 
+  useEffect(() => {
+    // Add event listener to detect toolbar button clicks
+    const handleMouseDown = (e) => {
+      // Check if click is on a toolbar button
+      if (e.target.closest('button[type="button"]')) {
+        preventBlurRef.current = true;
+        setTimeout(() => {
+          preventBlurRef.current = false;
+        }, 100);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown, true);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+    };
+  }, []);
+
   const handleChange = (mathField) => {
     if (onChange) {
       onChange(mathField.latex());
+    }
+  };
+
+  const handleBlur = () => {
+    if (preventBlurRef.current && mathFieldRef.current) {
+      // Refocus if blur was caused by toolbar button click
+      requestAnimationFrame(() => {
+        mathFieldRef.current.focus();
+      });
     }
   };
 
@@ -54,6 +82,7 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
             }
           }
         }}
+        onBlur={handleBlur}
       >
         <EditableMathField
           latex={value || ''}
