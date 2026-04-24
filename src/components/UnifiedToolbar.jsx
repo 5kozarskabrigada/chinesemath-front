@@ -1,18 +1,11 @@
 import React from 'react';
 import { getActiveMathField } from './MathExtension';
 
-const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
+const ToolbarButton = ({ onClick, onMouseDown, isActive, disabled, title, children, isMath }) => (
   <button
     type="button"
-    onMouseDown={(e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    }}
-    onClick={(e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onClick();
-    }}
+    onMouseDown={onMouseDown}
+    onClick={onClick}
     disabled={disabled}
     title={title}
     className={`min-w-[28px] h-7 px-2 rounded flex items-center justify-center text-sm transition-colors ${
@@ -20,6 +13,8 @@ const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
         ? 'bg-indigo-100 text-indigo-700'
         : disabled
         ? 'text-gray-300 cursor-not-allowed'
+        : isMath
+        ? 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 font-serif'
         : 'text-slate-700 hover:bg-slate-100'
     }`}
   >
@@ -27,56 +22,23 @@ const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
   </button>
 );
 
-const mathSymbols = [
-  { label: '×', cmd: '\\times', useWrite: true },
-  { label: '÷', cmd: '\\div', useWrite: true },
-  { label: '±', cmd: '\\pm', useWrite: true },
-  { label: '≤', cmd: '\\le', useWrite: true },
-  { label: '≥', cmd: '\\ge', useWrite: true },
-  { label: '≠', cmd: '\\ne', useWrite: true },
-  { label: '≈', cmd: '\\approx', useWrite: true },
-  { label: 'π', cmd: '\\pi', useWrite: true },
-  { label: '∞', cmd: '\\infty', useWrite: true },
-  { label: '√', cmd: '\\sqrt', useWrite: false },
-  { label: 'ⁿ√', cmd: '\\sqrt[', useWrite: false },
-  { label: 'x²', cmd: '^2', useWrite: true },
-  { label: 'xⁿ', cmd: '^', useWrite: false },
-  { label: 'x₁', cmd: '_', useWrite: false },
-  { label: '½', cmd: '\\frac', useWrite: false },
-  { label: '∑', cmd: '\\sum', useWrite: false },
-  { label: '∫', cmd: '\\int', useWrite: false },
-  { label: '°', cmd: '\\degree', useWrite: true },
-  { label: '∠', cmd: '\\angle', useWrite: true },
-  { label: '△', cmd: '\\triangle', useWrite: true },
-  { label: '∥', cmd: '\\parallel', useWrite: true },
-  { label: '⊥', cmd: '\\perp', useWrite: true },
-];
-
 const UnifiedToolbar = ({ editor, showMath = true }) => {
   const isDisabled = !editor || !editor.isEditable;
 
-  const insertMath = (cmd, useWrite = false) => {
+  // Helper for preventing focus loss on toolbar buttons
+  const preventFocusLoss = (e) => {
+    e.preventDefault();
+  };
+
+  const insertMath = (latex) => {
     const activeMathField = getActiveMathField();
     if (activeMathField) {
-      // For nth root, use proper latex() method
-      if (cmd === '\\sqrt[') {
-        const currentLatex = activeMathField.latex();
-        activeMathField.latex(currentLatex + '\\sqrt[]{}');
-        // Move cursor to the bracket position
-        for (let i = 0; i < 3; i++) {
-          activeMathField.keystroke('Left');
-        }
-      } else if (useWrite) {
-        // Use .write() for simple symbols that render immediately
-        activeMathField.write(cmd);
-      } else {
-        // Use .cmd() for commands that open structures
-        activeMathField.cmd(cmd);
-      }
+      activeMathField.cmd(latex);
+      activeMathField.focus();
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
-        attrs: { latex: cmd.replace(/^\\/,'').replace('sqrt[', '').replace('nthroot', '') }
+        attrs: { latex }
       }).run();
     }
   };
@@ -150,16 +112,9 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
           <>
             <button
               type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                insertMathNode();
-              }}
+              onClick={insertMathNode}
               disabled={isDisabled}
+              title="Insert Interactive Formula Box"
               className="px-3 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               <span className="font-serif italic">f(x)</span>
@@ -167,26 +122,177 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
             </button>
 
             <div className="flex items-center gap-0.5 flex-wrap">
-              {mathSymbols.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    insertMath(item.cmd, item.useWrite);
-                  }}
-                  disabled={isDisabled}
-                  className="min-w-[26px] h-7 px-1 rounded flex items-center justify-center text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-transparent hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={item.cmd}
-                >
-                  {item.label}
-                </button>
-              ))}
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\frac{}{}')}
+                disabled={isDisabled}
+                title="Fraction"
+                isMath
+              >
+                ½
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\sqrt{}')}
+                disabled={isDisabled}
+                title="Square Root"
+                isMath
+              >
+                √
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\sqrt[]{}')}
+                disabled={isDisabled}
+                title="N-th Root"
+                isMath
+              >
+                ∛
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('^{}')}
+                disabled={isDisabled}
+                title="Superscript / Power"
+                isMath
+              >
+                xʸ
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('_{}')}
+                disabled={isDisabled}
+                title="Subscript"
+                isMath
+              >
+                x₁
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\times')}
+                disabled={isDisabled}
+                title="Multiply"
+                isMath
+              >
+                ×
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\div')}
+                disabled={isDisabled}
+                title="Divide"
+                isMath
+              >
+                ÷
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\pm')}
+                disabled={isDisabled}
+                title="Plus-Minus"
+                isMath
+              >
+                ±
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\le')}
+                disabled={isDisabled}
+                title="Less or Equal"
+                isMath
+              >
+                ≤
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\ge')}
+                disabled={isDisabled}
+                title="Greater or Equal"
+                isMath
+              >
+                ≥
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\ne')}
+                disabled={isDisabled}
+                title="Not Equal"
+                isMath
+              >
+                ≠
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\approx')}
+                disabled={isDisabled}
+                title="Approximately"
+                isMath
+              >
+                ≈
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\pi')}
+                disabled={isDisabled}
+                title="Pi"
+                isMath
+              >
+                π
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\theta')}
+                disabled={isDisabled}
+                title="Theta"
+                isMath
+              >
+                θ
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\infty')}
+                disabled={isDisabled}
+                title="Infinity"
+                isMath
+              >
+                ∞
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\angle')}
+                disabled={isDisabled}
+                title="Angle"
+                isMath
+              >
+                ∠
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\triangle')}
+                disabled={isDisabled}
+                title="Triangle"
+                isMath
+              >
+                △
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\parallel')}
+                disabled={isDisabled}
+                title="Parallel"
+                isMath
+              >
+                ∥
+              </ToolbarButton>
+              <ToolbarButton
+                onMouseDown={preventFocusLoss}
+                onClick={() => insertMath('\\perp')}
+                disabled={isDisabled}
+                title="Perpendicular"
+                isMath
+              >
+                ⊥
+              </ToolbarButton>
             </div>
           </>
         )}

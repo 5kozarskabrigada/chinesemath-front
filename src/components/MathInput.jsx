@@ -54,22 +54,16 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
             }
           }}
           config={{
+          config={{
             spaceBehavesLikeTab: true,
             leftRightIntoCmdGoes: 'up',
-            restrictMismatchedBrackets: false,
+            restrictMismatchedBrackets: true,
             sumStartsWithNEquals: true,
-            supSubsRequireOperand: false,
-            charsThatBreakOutOfSupSub: '',
+            supSubsRequireOperand: true,
+            charsThatBreakOutOfSupSub: '+=<>',
             autoSubscriptNumerals: true,
-            handlers: {
-              edit: (mathField) => {
-                if (onChange) {
-                  onChange(mathField.latex());
-                }
-              }
-            },
-            autoCommands: 'pi theta sqrt sum int alpha beta gamma delta epsilon zeta eta mu nu xi rho sigma tau phi chi psi omega infty approx le ge ne angle triangle parallel perp pm times div cdot',
-            autoOperatorNames: 'sin cos tan log ln sec csc cot arcsin arccos arctan sinh cosh tanh'
+            autoCommands: 'pi theta sqrt sum int alpha beta gamma infty approx le ge ne angle triangle parallel perp',
+            autoOperatorNames: 'sin cos tan log ln'
           }}
         />
       </div>
