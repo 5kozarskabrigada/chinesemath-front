@@ -58,11 +58,11 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
             leftRightIntoCmdGoes: 'up',
             restrictMismatchedBrackets: true,
             sumStartsWithNEquals: true,
-            supSubsRequireOperand: true,
-            charsThatBreakOutOfSupSub: '+=<>',
+            supSubsRequireOperand: false,
+            charsThatBreakOutOfSupSub: '',
             autoSubscriptNumerals: true,
-            autoCommands: 'pi theta sqrt sum int alpha beta gamma infty approx le ge ne angle triangle parallel perp',
-            autoOperatorNames: 'sin cos tan log ln'
+            autoCommands: 'pi theta sqrt sum int alpha beta gamma delta epsilon zeta eta mu nu xi rho sigma tau phi chi psi omega infty approx le ge ne angle triangle parallel perp pm times div cdot',
+            autoOperatorNames: 'sin cos tan log ln sec csc cot arcsin arccos arctan sinh cosh tanh'
           }}
         />
       </div>
