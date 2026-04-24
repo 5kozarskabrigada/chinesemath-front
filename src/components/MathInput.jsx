@@ -8,7 +8,7 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
   const mathFieldRef = useRef(null);
 
   const handleChange = (mathField) => {
-    if (onChange) {
+    if (onChange && mathField && mathField.latex) {
       onChange(mathField.latex());
     }
   };
@@ -53,7 +53,6 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
               onInit(mathField);
             }
           }}
-          config={{
           config={{
             spaceBehavesLikeTab: true,
             leftRightIntoCmdGoes: 'up',
