@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
-import { apiGetRecycleBin, apiRestoreRecycleBinItem, apiPermanentlyDeleteRecycleBinItem } from "../../api/recycleBin";
-
-function fetchDeleted() {
-  return fetch("/api/admin/recycle-bin").then((res) => res.json());
-}
+import { apiGetRecycleBin, apiRestoreRecycleBinItem, apiPermanentlyDeleteRecycleBinItem } from "../../api";
 
 const typeMap = {
   users: "User",

@@ -170,3 +170,17 @@ export async function apiGetExamLogStats(filters = {}) {
   const query = params.toString();
   return request(`/api/admin/logs/stats${query ? `?${query}` : ""}`);
 }
+
+// ─── Admin: Recycle Bin ──────────────────────────────────────────────────────
+
+export async function apiGetRecycleBin() {
+  return request("/api/admin/recycle-bin");
+}
+
+export async function apiRestoreRecycleBinItem(type, id) {
+  return request(`/api/admin/recycle-bin/${type}/${id}/restore`, { method: "POST" });
+}
+
+export async function apiPermanentlyDeleteRecycleBinItem(type, id) {
+  return request(`/api/admin/recycle-bin/${type}/${id}`, { method: "DELETE" });
+}
