@@ -6,9 +6,11 @@ addStyles();
 
 const MathInput = ({ value, onChange, onInit, className = '' }) => {
   const mathFieldRef = useRef(null);
+  const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    if (onInit && mathFieldRef.current) {
+    if (onInit && mathFieldRef.current && !isInitializedRef.current) {
+      isInitializedRef.current = true;
       onInit(mathFieldRef.current);
     }
   }, [onInit]);

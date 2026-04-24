@@ -4,7 +4,10 @@ import { getActiveMathField } from './MathExtension';
 const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
   <button
     type="button"
-    onClick={onClick}
+    onClick={(e) => {
+      e.preventDefault();
+      onClick();
+    }}
     disabled={disabled}
     title={title}
     onMouseDown={(e) => e.preventDefault()}
@@ -58,10 +61,8 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
         // Use .cmd() for commands that open structures
         activeMathField.cmd(cmd);
       }
-      // Refocus the math field after insertion
-      setTimeout(() => {
-        activeMathField.focus();
-      }, 10);
+      // Keep focus immediately without delay
+      activeMathField.focus();
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
@@ -139,7 +140,10 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
           <>
             <button
               type="button"
-              onClick={insertMathNode}
+              onClick={(e) => {
+                e.preventDefault();
+                insertMathNode();
+              }}
               disabled={isDisabled}
               onMouseDown={(e) => e.preventDefault()}
               className="px-3 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
@@ -153,7 +157,10 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
                 <button
                   key={item.label}
                   type="button"
-                  onClick={() => insertMath(item.cmd, item.useWrite)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    insertMath(item.cmd, item.useWrite);
+                  }}
                   disabled={isDisabled}
                   onMouseDown={(e) => e.preventDefault()}
                   className="min-w-[26px] h-7 px-1 rounded flex items-center justify-center text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-transparent hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
