@@ -38,8 +38,16 @@ const MathComponent = ({ node, updateAttributes }) => {
   return (
     <NodeViewWrapper className="inline-block mx-1 align-middle" ref={wrapperRef}>
       {isEditing ? (
-        <div className="relative z-50 min-w-[300px]">
-           <MathInput 
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }} 
+          />
+          <div className="relative z-50 min-w-[300px]">
+            <MathInput 
               value={latex} 
               onChange={handleUpdate}
               className="border border-indigo-500 shadow-lg !min-h-[40px] !p-1 text-[1.1rem]"
@@ -50,18 +58,9 @@ const MathComponent = ({ node, updateAttributes }) => {
                       setGlobalActiveMathField(mf);
                   }, 50);
               }}
-           />
-           <div 
-             className="fixed inset-0 z-[-1]" 
-             onClick={(e) => {
-                 // Only close if clicking outside the wrapper
-                 if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-                   e.stopPropagation();
-                   handleClose();
-                 }
-             }} 
-           />
-        </div>
+            />
+          </div>
+        </>
       ) : (
         <span 
             className="cursor-pointer hover:bg-indigo-50 px-1 rounded transition-colors border border-transparent hover:border-indigo-200 text-[1.1rem] inline-block align-middle"
