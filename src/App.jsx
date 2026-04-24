@@ -13,11 +13,14 @@ import AdminClassrooms from "./pages/Admin/Classrooms";
 import ClassroomDetail from "./pages/Admin/ClassroomDetail";
 import ExamLogs from "./pages/Admin/ExamLogs";
 import RecycleBin from "./pages/Admin/RecycleBin";
+import ExamMonitoring from "./pages/Admin/ExamMonitoring";
 
 import StudentDashboard from "./pages/Student/Dashboard";
 import ExamCodeEntry from "./pages/Student/ExamCodeEntry";
+import ExamGettingReady from "./pages/Student/ExamGettingReady";
 import ExamPlayer from "./pages/Student/ExamPlayer";
 import ExamResult from "./pages/Student/ExamResult";
+import PhoneCameraSetup from "./pages/Student/PhoneCameraSetup";
 
 function ExamPlayerKeyed() {
   const { examId } = useParams();
@@ -87,6 +90,10 @@ function App() {
             path="/admin/recycle-bin"
             element={<PrivateRoute role="admin"><RecycleBin /></PrivateRoute>}
           />
+          <Route
+            path="/admin/exams/:examId/monitor"
+            element={<PrivateRoute role="admin"><ExamMonitoring /></PrivateRoute>}
+          />
 
           {/* Student */}
           <Route
@@ -98,12 +105,21 @@ function App() {
             element={<PrivateRoute role="student"><ExamCodeEntry /></PrivateRoute>}
           />
           <Route
+            path="/student/exam-setup/:examId"
+            element={<PrivateRoute role="student"><ExamGettingReady /></PrivateRoute>}
+          />
+          <Route
             path="/student/exam/:examId"
             element={<PrivateRoute role="student"><ExamPlayerKeyed /></PrivateRoute>}
           />
           <Route
             path="/student/exam/:examId/result"
             element={<PrivateRoute role="student"><ExamResult /></PrivateRoute>}
+          />
+          {/* Phone Camera Setup - No authentication required */}
+          <Route
+            path="/phone-camera/:examId/:studentId"
+            element={<PhoneCameraSetup />}
           />
 
           <Route path="/" element={<Navigate to="/login" replace />} />

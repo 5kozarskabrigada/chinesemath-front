@@ -41,6 +41,10 @@ export async function apiJoinExam(code) {
   return request("/api/exams/join", { method: "POST", body: JSON.stringify({ code }) });
 }
 
+export async function apiGetExam(examId) {
+  return request(`/api/exams/${examId}`);
+}
+
 export async function apiGetExamQuestions(examId) {
   return request(`/api/exams/${examId}/questions`);
 }

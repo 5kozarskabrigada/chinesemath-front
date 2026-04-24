@@ -15,7 +15,8 @@ export default function ExamCodeEntry() {
     setLoading(true);
     try {
       const exam = await apiJoinExam(code);
-      navigate(`/student/exam/${exam.id}`);
+      // Navigate to getting ready page instead of directly to exam
+      navigate(`/student/exam-setup/${exam.id}`);
     } catch (err) {
       setError(err.message || "Invalid exam code");
     } finally {
