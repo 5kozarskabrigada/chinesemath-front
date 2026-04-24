@@ -4,13 +4,17 @@ import { getActiveMathField } from './MathExtension';
 const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
   <button
     type="button"
+    onMouseDown={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }}
     onClick={(e) => {
       e.preventDefault();
+      e.stopPropagation();
       onClick();
     }}
     disabled={disabled}
     title={title}
-    onMouseDown={(e) => e.preventDefault()}
     className={`min-w-[28px] h-7 px-2 rounded flex items-center justify-center text-sm transition-colors ${
       isActive
         ? 'bg-indigo-100 text-indigo-700'
@@ -54,12 +58,14 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
   const insertMath = (cmd, useWrite = false) => {
     const activeMathField = getActiveMathField();
     if (activeMathField) {
-      // Special handling for different commands
+      // For nth root, use proper latex() method
       if (cmd === '\\sqrt[') {
-        // Type nth root - this creates the proper structure
-        activeMathField.typedText('\\sqrt');
-        activeMathField.keystroke('Left');
-        activeMathField.typedText('[');
+        const currentLatex = activeMathField.latex();
+        activeMathField.latex(currentLatex + '\\sqrt[]{}');
+        // Move cursor to the bracket position
+        for (let i = 0; i < 3; i++) {
+          activeMathField.keystroke('Left');
+        }
       } else if (useWrite) {
         // Use .write() for simple symbols that render immediately
         activeMathField.write(cmd);
@@ -67,10 +73,6 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
         // Use .cmd() for commands that open structures
         activeMathField.cmd(cmd);
       }
-      // Immediately refocus to prevent blur
-      requestAnimationFrame(() => {
-        activeMathField.focus();
-      });
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
@@ -148,12 +150,16 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
           <>
             <button
               type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
               onClick={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 insertMathNode();
               }}
               disabled={isDisabled}
-              onMouseDown={(e) => e.preventDefault()}
               className="px-3 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               <span className="font-serif italic">f(x)</span>
@@ -165,12 +171,16 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
                 <button
                   key={item.label}
                   type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   onClick={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     insertMath(item.cmd, item.useWrite);
                   }}
                   disabled={isDisabled}
-                  onMouseDown={(e) => e.preventDefault()}
                   className="min-w-[26px] h-7 px-1 rounded flex items-center justify-center text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-transparent hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={item.cmd}
                 >
