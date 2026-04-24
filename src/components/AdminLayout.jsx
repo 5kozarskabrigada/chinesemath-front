@@ -11,6 +11,7 @@ import {
   PanelLeftOpen,
   School,
   Activity,
+  Trash2,
 } from "lucide-react";
 
 // Navigation items for admin sidebar
@@ -21,7 +22,7 @@ const navItems = [
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/classrooms", label: "Classrooms", icon: School },
   { to: "/admin/logs", label: "Exam Logs", icon: Activity },
-  { to: "/admin/recycle-bin", label: "Recycle Bin", icon: PanelLeftClose }, // Added
+  { to: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2 }, // Added
 ];
 
 export default function AdminLayout({ children }) {
