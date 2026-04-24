@@ -31,6 +31,7 @@ const mathSymbols = [
   { label: 'π', cmd: '\\pi', useWrite: true },
   { label: '∞', cmd: '\\infty', useWrite: true },
   { label: '√', cmd: '\\sqrt', useWrite: false },
+  { label: 'ⁿ√', cmd: '\\sqrt[', useWrite: false },
   { label: 'x²', cmd: '^2', useWrite: true },
   { label: 'xⁿ', cmd: '^', useWrite: false },
   { label: 'x₁', cmd: '_', useWrite: false },
@@ -50,10 +51,11 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
   const insertMath = (cmd, useWrite = false) => {
     const activeMathField = getActiveMathField();
     if (activeMathField) {
-      // Use .write() for simple symbols, .cmd() for commands that open structures
       if (useWrite) {
+        // Use .write() for simple symbols
         activeMathField.write(cmd);
       } else {
+        // Use .cmd() for commands that open structures
         activeMathField.cmd(cmd);
       }
       // Refocus the math field after insertion
@@ -63,7 +65,7 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
-        attrs: { latex: cmd.replace(/^\\/,'') }
+        attrs: { latex: cmd.replace(/^\\/,'').replace('nthroot', '') }
       }).run();
     }
   };
