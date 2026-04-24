@@ -43,6 +43,15 @@ const MathInput = ({ value, onChange, onInit, className = '' }) => {
       `}</style>
       <div 
         className={`math-input-wrapper bg-white border border-gray-300 rounded-md p-3 min-h-[60px] flex items-center cursor-text focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 ${className}`}
+        onMouseDown={(e) => {
+          // Prevent this wrapper from stealing focus from the math field
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            if (mathFieldRef.current) {
+              mathFieldRef.current.focus();
+            }
+          }
+        }}
       >
         <EditableMathField
           latex={value || ''}

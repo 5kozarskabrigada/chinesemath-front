@@ -17,10 +17,16 @@ const MathComponent = ({ node, updateAttributes }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [latex, setLatex] = useState(node.attrs.latex || '');
   const mathFieldRef = useRef(null);
+  const wrapperRef = useRef(null);
 
   const handleUpdate = (newLatex) => {
     setLatex(newLatex);
     updateAttributes({ latex: newLatex });
+  };
+
+  const handleClose = () => {
+    setIsEditing(false);
+    setGlobalActiveMathField(null);
   };
 
   useEffect(() => {
@@ -30,7 +36,7 @@ const MathComponent = ({ node, updateAttributes }) => {
   }, [isEditing]);
 
   return (
-    <NodeViewWrapper className="inline-block mx-1 align-middle">
+    <NodeViewWrapper className="inline-block mx-1 align-middle" ref={wrapperRef}>
       {isEditing ? (
         <div className="relative z-50 min-w-[300px]">
            <MathInput 
@@ -48,9 +54,11 @@ const MathComponent = ({ node, updateAttributes }) => {
            <div 
              className="fixed inset-0 z-[-1]" 
              onClick={(e) => {
-                 e.stopPropagation();
-                 setIsEditing(false);
-                 setGlobalActiveMathField(null);
+                 // Only close if clicking outside the wrapper
+                 if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+                   e.stopPropagation();
+                   handleClose();
+                 }
              }} 
            />
         </div>

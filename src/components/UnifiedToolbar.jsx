@@ -21,37 +21,45 @@ const ToolbarButton = ({ onClick, isActive, disabled, title, children }) => (
 );
 
 const mathSymbols = [
-  { label: '×', cmd: '\\times' },
-  { label: '÷', cmd: '\\div' },
-  { label: '±', cmd: '\\pm' },
-  { label: '≤', cmd: '\\le' },
-  { label: '≥', cmd: '\\ge' },
-  { label: '≠', cmd: '\\ne' },
-  { label: '≈', cmd: '\\approx' },
-  { label: 'π', cmd: '\\pi' },
-  { label: '∞', cmd: '\\infty' },
-  { label: '√', cmd: '\\sqrt' },
-  { label: 'x²', cmd: '^2' },
-  { label: 'xⁿ', cmd: '^' },
-  { label: 'x₁', cmd: '_' },
-  { label: '½', cmd: '\\frac' },
-  { label: '∑', cmd: '\\sum' },
-  { label: '∫', cmd: '\\int' },
-  { label: '°', cmd: '\\degree' },
-  { label: '∠', cmd: '\\angle' },
-  { label: '△', cmd: '\\triangle' },
-  { label: '∥', cmd: '\\parallel' },
-  { label: '⊥', cmd: '\\perp' },
+  { label: '×', cmd: '\\times', useWrite: true },
+  { label: '÷', cmd: '\\div', useWrite: true },
+  { label: '±', cmd: '\\pm', useWrite: true },
+  { label: '≤', cmd: '\\le', useWrite: true },
+  { label: '≥', cmd: '\\ge', useWrite: true },
+  { label: '≠', cmd: '\\ne', useWrite: true },
+  { label: '≈', cmd: '\\approx', useWrite: true },
+  { label: 'π', cmd: '\\pi', useWrite: true },
+  { label: '∞', cmd: '\\infty', useWrite: true },
+  { label: '√', cmd: '\\sqrt', useWrite: false },
+  { label: 'x²', cmd: '^2', useWrite: true },
+  { label: 'xⁿ', cmd: '^', useWrite: false },
+  { label: 'x₁', cmd: '_', useWrite: false },
+  { label: '½', cmd: '\\frac', useWrite: false },
+  { label: '∑', cmd: '\\sum', useWrite: false },
+  { label: '∫', cmd: '\\int', useWrite: false },
+  { label: '°', cmd: '\\degree', useWrite: true },
+  { label: '∠', cmd: '\\angle', useWrite: true },
+  { label: '△', cmd: '\\triangle', useWrite: true },
+  { label: '∥', cmd: '\\parallel', useWrite: true },
+  { label: '⊥', cmd: '\\perp', useWrite: true },
 ];
 
 const UnifiedToolbar = ({ editor, showMath = true }) => {
   const isDisabled = !editor || !editor.isEditable;
 
-  const insertMath = (cmd) => {
+  const insertMath = (cmd, useWrite = false) => {
     const activeMathField = getActiveMathField();
     if (activeMathField) {
-      activeMathField.cmd(cmd);
-      activeMathField.focus();
+      // Use .write() for simple symbols, .cmd() for commands that open structures
+      if (useWrite) {
+        activeMathField.write(cmd);
+      } else {
+        activeMathField.cmd(cmd);
+      }
+      // Refocus the math field after insertion
+      setTimeout(() => {
+        activeMathField.focus();
+      }, 10);
     } else if (editor && !isDisabled) {
       editor.chain().focus().insertContent({
         type: 'mathComponent',
@@ -143,7 +151,7 @@ const UnifiedToolbar = ({ editor, showMath = true }) => {
                 <button
                   key={item.label}
                   type="button"
-                  onClick={() => insertMath(item.cmd)}
+                  onClick={() => insertMath(item.cmd, item.useWrite)}
                   disabled={isDisabled}
                   onMouseDown={(e) => e.preventDefault()}
                   className="min-w-[26px] h-7 px-1 rounded flex items-center justify-center text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-transparent hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
