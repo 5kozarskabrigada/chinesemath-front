@@ -4,6 +4,7 @@ import AdminLayout from "../../components/AdminLayout";
 import { apiCreateExam, apiGetAdminExamById, apiUpdateExam } from "../../api";
 import { ArrowLeft, ChevronDown, Loader2, Save, Trash2, Check, GripVertical, Edit2, X } from "lucide-react";
 import RichTextEditor from "../../components/RichTextEditor";
+import { renderMath } from "../../utils/math";
 
 const TOTAL_QUESTIONS = 48;
 
@@ -185,8 +186,19 @@ export default function AdminExamEditor() {
   };
 
   const getQuestionPreview = (question) => {
-    const text = question.question_text.replace(/<[^>]*>/g, '').trim();
-    return text.length > 60 ? text.substring(0, 60) + '...' : text || 'Empty question';
+    const text = question.question_text.trim();
+    if (!text) return 'Empty question';
+    
+    // Render with math support and truncate if needed
+    const rendered = renderMath(text);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = rendered;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    if (plainText.length > 60) {
+      return renderMath(text.substring(0, 60) + '...');
+    }
+    return rendered;
   };
 
   const isQuestionComplete = (question) => {
@@ -436,9 +448,10 @@ export default function AdminExamEditor() {
                             )}
                           </div>
                           {!isExpanded && (
-                            <span className="text-xs text-gray-500 truncate ml-2">
-                              {getQuestionPreview(question)}
-                            </span>
+                            <span 
+                              className="text-xs text-gray-500 truncate ml-2"
+                              dangerouslySetInnerHTML={{ __html: getQuestionPreview(question) }}
+                            />
                           )}
                         </button>
                       </div>
