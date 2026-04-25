@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { 
   Monitor, 
@@ -17,8 +16,7 @@ import {
 } from "lucide-react";
 import io from 'socket.io-client';
 
-export default function ExamMonitoring() {
-  const { examId } = useParams();
+export default function ExamMonitoring({ examId }) {
   const [exam, setExam] = useState(null);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
