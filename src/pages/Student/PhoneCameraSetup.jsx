@@ -77,6 +77,14 @@ export default function PhoneCameraSetup() {
     console.log('Camera Ready button clicked, examId:', examId, 'studentId:', studentId);
     console.log('Socket connected:', !!CameraService.socket);
 
+    // Fallback: use localStorage
+    const storageKey = `phone_camera_ready_${examId}_${studentId}`;
+    localStorage.setItem(storageKey, JSON.stringify({
+      timestamp: Date.now(),
+      examId,
+      studentId
+    }));
+
     if (CameraService.socket) {
       CameraService.socket.emit('phone_camera_ready', { examId, studentId });
       setNotificationSent(true);
@@ -85,7 +93,7 @@ export default function PhoneCameraSetup() {
       // Reset after 3 seconds
       setTimeout(() => setNotificationSent(false), 3000);
     } else {
-      console.error('Socket not connected');
+      console.error('Socket not connected, using localStorage fallback');
       setError('Not connected to monitoring system. Please refresh the page.');
     }
   };
