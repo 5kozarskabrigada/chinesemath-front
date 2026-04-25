@@ -102,23 +102,25 @@ export default function ExamGettingReady() {
 
     initializeCameraService();
 
-    // Listen for phone camera messages
-    const handleMessage = (event) => {
-      if (event.data.type === 'PHONE_CAMERA_READY') {
-        setPhoneCameraReady(true);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
+    // Listen for phone camera ready event via Socket.IO
+    if (CameraService.socket) {
+      CameraService.socket.on('phone_camera_ready', (data) => {
+        if (data.studentId === user?.id) {
+          setPhoneCameraReady(true);
+        }
+      });
+    }
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      if (CameraService.socket) {
+        CameraService.socket.off('phone_camera_ready');
+      }
       if (healthCheckInterval.current) {
         clearInterval(healthCheckInterval.current);
       }
       CameraService.cleanup();
     };
-  }, [examId]);
+  }, [examId, user?.id]);
 
   // Handle laptop camera initialization
   const handleLaptopCameraSetup = async () => {

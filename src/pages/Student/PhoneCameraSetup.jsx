@@ -47,6 +47,12 @@ export default function PhoneCameraSetup() {
 
         // Initialize phone camera
         await CameraService.initializePhoneCamera();
+
+        // Emit socket event to notify laptop that phone camera is ready
+        if (CameraService.socket) {
+          CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+        }
+
         setConnecting(false);
 
       } catch (error) {
@@ -92,6 +98,11 @@ export default function PhoneCameraSetup() {
       setCameraReady(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+      }
+
+      // Emit socket event to notify laptop that phone camera is ready
+      if (CameraService.socket) {
+        CameraService.socket.emit('phone_camera_ready', { examId, studentId });
       }
     } catch (error) {
       setError("Failed to switch camera: " + error.message);
