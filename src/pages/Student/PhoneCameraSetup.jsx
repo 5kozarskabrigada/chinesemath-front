@@ -25,17 +25,28 @@ export default function PhoneCameraSetup() {
           onError: setError
         });
 
+        // Add timeout for connection
+        const timeout = setTimeout(() => {
+          if (connecting) {
+            setError("Connection timeout. Please check your internet and try again.");
+            setConnecting(false);
+          }
+        }, 15000); // 15 second timeout
+
         // Initialize socket connection
         const connected = await CameraService.initializeSocket(examId, studentId);
         if (!connected) {
+          clearTimeout(timeout);
           setError("Failed to connect to monitoring system");
           return;
         }
 
+        clearTimeout(timeout);
+
         // Initialize phone camera
         await CameraService.initializePhoneCamera();
         setConnecting(false);
-        
+
       } catch (error) {
         setError("Failed to access phone camera: " + error.message);
         setConnecting(false);
@@ -47,7 +58,7 @@ export default function PhoneCameraSetup() {
     return () => {
       CameraService.cleanup();
     };
-  }, [examId, studentId]);
+  }, [examId, studentId, connecting]);
 
   const dismissInstructions = () => {
     setInstructions(false);
