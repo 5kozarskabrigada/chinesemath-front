@@ -174,7 +174,7 @@ class CameraService {
   // Generate QR code URL for phone camera
   generatePhoneURL(examId, studentId) {
     const baseURL = window.location.origin;
-    const phoneURL = `${baseURL}/phone-camera/${examId}/${studentId}`;
+    const phoneURL = `${baseURL}/3/phone-camera/${examId}/${studentId}`;
     return phoneURL;
   }
 
