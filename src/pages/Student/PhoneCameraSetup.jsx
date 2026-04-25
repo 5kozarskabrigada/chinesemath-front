@@ -93,8 +93,11 @@ export default function PhoneCameraSetup() {
   const switchCamera = async () => {
     setSwitching(true);
     try {
-      // Stop current camera
-      CameraService.cleanup();
+      // Only stop the camera stream, not the socket
+      if (CameraService.phoneStream) {
+        CameraService.phoneStream.getTracks().forEach(track => track.stop());
+        CameraService.phoneStream = null;
+      }
       setCameraReady(false);
 
       // Switch facing mode
@@ -116,6 +119,11 @@ export default function PhoneCameraSetup() {
       setCameraReady(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+      }
+
+      // Reconnect socket if disconnected
+      if (!CameraService.socket) {
+        await CameraService.initializeSocket(examId, studentId);
       }
 
       // Emit socket event to notify laptop that phone camera is ready
