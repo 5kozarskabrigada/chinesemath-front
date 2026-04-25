@@ -105,51 +105,19 @@ export default function ExamGettingReady() {
     // Listen for phone camera ready event via Socket.IO
     if (CameraService.socket) {
       CameraService.socket.on('phone_camera_ready', (data) => {
+        console.log('Received phone_camera_ready event:', data);
+        console.log('Current user ID:', user?.id);
         if (data.studentId === user?.id) {
           setPhoneCameraReady(true);
+          console.log('Phone camera marked as ready');
         }
       });
-    }
-
-    // Fallback: listen for localStorage events from phone camera
-    const handleStorageChange = (e) => {
-      if (e.key === `phone_camera_ready_${examId}_${user?.id}`) {
-        try {
-          const data = JSON.parse(e.newValue);
-          if (data.examId === examId && data.studentId === user?.id) {
-            setPhoneCameraReady(true);
-            // Clear the localStorage entry after reading
-            localStorage.removeItem(e.key);
-          }
-        } catch (err) {
-          console.error('Error parsing localStorage data:', err);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also check immediately in case the notification was already sent
-    const storageKey = `phone_camera_ready_${examId}_${user?.id}`;
-    const existingData = localStorage.getItem(storageKey);
-    if (existingData) {
-      try {
-        const data = JSON.parse(existingData);
-        // Check if it's recent (within 10 seconds)
-        if (Date.now() - data.timestamp < 10000) {
-          setPhoneCameraReady(true);
-          localStorage.removeItem(storageKey);
-        }
-      } catch (err) {
-        console.error('Error parsing existing localStorage data:', err);
-      }
     }
 
     return () => {
       if (CameraService.socket) {
         CameraService.socket.off('phone_camera_ready');
       }
-      window.removeEventListener('storage', handleStorageChange);
       if (healthCheckInterval.current) {
         clearInterval(healthCheckInterval.current);
       }
