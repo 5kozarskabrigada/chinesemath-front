@@ -11,6 +11,7 @@ export default function PhoneCameraSetup() {
   const [instructions, setInstructions] = useState(true);
   const [facingMode, setFacingMode] = useState('environment'); // 'user' for front, 'environment' for back
   const [switching, setSwitching] = useState(false);
+  const [notificationSent, setNotificationSent] = useState(false);
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -73,8 +74,19 @@ export default function PhoneCameraSetup() {
   };
 
   const notifyCameraReady = () => {
+    console.log('Camera Ready button clicked, examId:', examId, 'studentId:', studentId);
+    console.log('Socket connected:', !!CameraService.socket);
+
     if (CameraService.socket) {
       CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+      setNotificationSent(true);
+      console.log('Emitted phone_camera_ready event');
+
+      // Reset after 3 seconds
+      setTimeout(() => setNotificationSent(false), 3000);
+    } else {
+      console.error('Socket not connected');
+      setError('Not connected to monitoring system. Please refresh the page.');
     }
   };
 
@@ -230,10 +242,10 @@ export default function PhoneCameraSetup() {
           <div className="flex gap-2 justify-center">
             <button
               onClick={notifyCameraReady}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+              className={`${notificationSent ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2`}
             >
               <CheckCircle className="w-4 h-4" />
-              Camera Ready
+              {notificationSent ? 'Sent!' : 'Camera Ready'}
             </button>
             <button
               onClick={switchCamera}
