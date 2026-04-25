@@ -16,12 +16,46 @@ class CameraService {
     };
   }
 
+  // Check if camera API is available
+  checkCameraSupport() {
+    if (!navigator) {
+      throw new Error('Navigator not available');
+    }
+
+    if (!navigator.mediaDevices) {
+      throw new Error('Camera access requires HTTPS or localhost. Please use a secure connection.');
+    }
+
+    if (!navigator.mediaDevices.getUserMedia) {
+      throw new Error('getUserMedia not supported in this browser');
+    }
+
+    // Check if page is served over HTTPS (except localhost)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHTTPS = window.location.protocol === 'https:';
+    
+    if (!isHTTPS && !isLocalhost) {
+      throw new Error('Camera access requires HTTPS. Please access the site using https://');
+    }
+
+    return true;
+  }
+
   // Initialize socket connection for real-time monitoring
   async initializeSocket(examId, studentId) {
     try {
+      // Use environment variable or fallback to localhost
       const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+      
+      console.log('Attempting to connect to monitoring server:', baseURL);
+      
       this.socket = io(baseURL, {
-        query: { examId, studentId, type: 'student' }
+        query: { examId, studentId, type: 'student' },
+        timeout: 10000,
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 3,
+        reconnectionDelay: 2000
       });
 
       this.socket.on('connect', () => {
@@ -30,10 +64,15 @@ class CameraService {
         console.log('Connected to monitoring server');
       });
 
-      this.socket.on('disconnect', () => {
+      this.socket.on('disconnect', (reason) => {
         this.isConnected = false;
         this.callbacks.onConnectionStatus?.(false);
-        console.log('Disconnected from monitoring server');
+        console.log('Disconnected from monitoring server:', reason);
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.warn('Socket connection error:', error.message);
+        this.callbacks.onError?.('Monitoring system unavailable. Exam can continue without live monitoring.');
       });
 
       this.socket.on('admin_request_camera_check', () => {
@@ -45,17 +84,19 @@ class CameraService {
         window.location.href = '/student/dashboard';
       });
 
+      // Return true even if socket fails - exam can continue without monitoring
       return true;
     } catch (error) {
-      console.error('Socket initialization failed:', error);
-      this.callbacks.onError?.('Failed to connect to monitoring system');
-      return false;
+      console.warn('Socket initialization failed:', error);
+      this.callbacks.onError?.('Monitoring system unavailable. Exam can continue without live monitoring.');
+      return true; // Allow exam to proceed
     }
   }
 
   // Get available cameras
   async getAvailableCameras() {
     try {
+      this.checkCameraSupport();
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       return videoDevices.map(device => ({
@@ -65,7 +106,7 @@ class CameraService {
       }));
     } catch (error) {
       console.error('Error getting cameras:', error);
-      throw new Error('Unable to access camera devices');
+      throw error;
     }
   }
 
@@ -80,6 +121,8 @@ class CameraService {
   // Initialize laptop camera
   async initializeLaptopCamera(deviceId = null) {
     try {
+      this.checkCameraSupport();
+      
       const constraints = {
         video: {
           width: { ideal: 1280, max: 1920 },
@@ -101,8 +144,29 @@ class CameraService {
       return this.laptopStream;
     } catch (error) {
       console.error('Laptop camera initialization failed:', error);
-      this.callbacks.onError?.('Unable to access laptop camera. Please check permissions.');
-      throw error;
+      
+      let errorMessage = 'Unable to access laptop camera.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No camera found. Please connect a camera and try again.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = 'Camera constraints not supported. Trying with basic settings...';
+        // Try again with basic constraints
+        try {
+          const basicConstraints = { video: true, audio: true };
+          this.laptopStream = await navigator.mediaDevices.getUserMedia(basicConstraints);
+          this.callbacks.onLaptopCameraReady?.(this.laptopStream);
+          return this.laptopStream;
+        } catch (basicError) {
+          errorMessage = 'Camera not compatible with exam requirements.';
+        }
+      } else if (error.message.includes('HTTPS') || error.message.includes('secure')) {
+        errorMessage = error.message;
+      }
+      
+      this.callbacks.onError?.(errorMessage);
+      throw new Error(errorMessage);
     }
   }
 
@@ -116,6 +180,8 @@ class CameraService {
   // Handle phone camera connection (called from phone)
   async initializePhoneCamera() {
     try {
+      this.checkCameraSupport();
+      
       const constraints = {
         video: {
           width: { ideal: 1280, max: 1920 },
@@ -139,8 +205,32 @@ class CameraService {
       return this.phoneStream;
     } catch (error) {
       console.error('Phone camera initialization failed:', error);
-      this.callbacks.onError?.('Unable to access phone camera. Please check permissions.');
-      throw error;
+      
+      let errorMessage = 'Unable to access phone camera.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No back camera found. Please use a device with a rear camera.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = 'Back camera not available. Trying front camera...';
+        // Try again with front camera
+        try {
+          const fallbackConstraints = {
+            video: { facingMode: 'user' },
+            audio: false
+          };
+          this.phoneStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          this.callbacks.onPhoneCameraReady?.(this.phoneStream);
+          return this.phoneStream;
+        } catch (fallbackError) {
+          errorMessage = 'No suitable camera found on this device.';
+        }
+      } else if (error.message.includes('HTTPS') || error.message.includes('secure')) {
+        errorMessage = error.message;
+      }
+      
+      this.callbacks.onError?.(errorMessage);
+      throw new Error(errorMessage);
     }
   }
 

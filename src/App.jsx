@@ -41,7 +41,7 @@ function PrivateRoute({ children, role }) {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/3">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
@@ -89,6 +89,10 @@ function App() {
           <Route
             path="/admin/recycle-bin"
             element={<PrivateRoute role="admin"><RecycleBin /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/monitoring"
+            element={<PrivateRoute role="admin"><ExamMonitoring /></PrivateRoute>}
           />
           <Route
             path="/admin/exams/:examId/monitor"

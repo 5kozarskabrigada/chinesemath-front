@@ -121,6 +121,8 @@ export default function ExamGettingReady() {
   // Handle laptop camera initialization
   const handleLaptopCameraSetup = async () => {
     setTestingCameras(true);
+    setError(""); // Clear any previous errors
+    
     try {
       const stream = await CameraService.initializeLaptopCamera(selectedCamera);
       
@@ -133,7 +135,24 @@ export default function ExamGettingReady() {
       
       setCurrentStep(2);
     } catch (error) {
-      setError("Failed to access laptop camera: " + error.message);
+      console.error("Laptop camera setup failed:", error);
+      
+      // Provide user-friendly error messages
+      let userMessage = error.message;
+      
+      if (error.message.includes('HTTPS') || error.message.includes('secure')) {
+        userMessage = "⚠️ Secure connection required: Please access this exam using HTTPS (https://) for camera access to work properly.";
+      } else if (error.message.includes('getUserMedia not supported')) {
+        userMessage = "❌ Your browser doesn't support camera access. Please try using Chrome, Firefox, Safari, or Edge.";
+      } else if (error.name === 'NotAllowedError' || error.message.includes('permission denied')) {
+        userMessage = "🔒 Camera permission denied. Please click 'Allow' when prompted, or check your browser's camera settings.";
+      } else if (error.name === 'NotFoundError' || error.message.includes('No camera found')) {
+        userMessage = "📷 No camera detected. Please connect a camera and refresh the page.";
+      } else if (error.message.includes('Navigator not available')) {
+        userMessage = "🌐 Browser compatibility issue. Please try refreshing the page or using a different browser.";
+      }
+      
+      setError(userMessage);
     } finally {
       setTestingCameras(false);
     }
@@ -264,12 +283,62 @@ export default function ExamGettingReady() {
         {/* Error Display */}
         {error && (
           <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
-              <p className="text-red-700">{error}</p>
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-red-700 mb-3">{error}</p>
+                
+                {/* Actionable guidance for common issues */}
+                {(error.includes('HTTPS') || error.includes('secure')) && (
+                  <div className="text-sm text-red-600 bg-red-100 p-3 rounded-lg">
+                    <p className="font-medium mb-2">🔧 How to fix this:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs">
+                      <li>Make sure the URL starts with "https://" not "http://"</li>
+                      <li>Contact your instructor for the correct secure exam link</li>
+                      <li>If using localhost, try 127.0.0.1 instead</li>
+                    </ul>
+                  </div>
+                )}
+                
+                {error.includes('browser') && (
+                  <div className="text-sm text-red-600 bg-red-100 p-3 rounded-lg">
+                    <p className="font-medium mb-2">🔧 Try these browsers:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs">
+                      <li>Chrome (recommended)</li>
+                      <li>Firefox</li>
+                      <li>Safari</li>
+                      <li>Microsoft Edge</li>
+                    </ul>
+                  </div>
+                )}
+                
+                {error.includes('permission') && (
+                  <div className="text-sm text-red-600 bg-red-100 p-3 rounded-lg">
+                    <p className="font-medium mb-2">🔧 Camera permission steps:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs">
+                      <li>Click "Allow" when prompted for camera access</li>
+                      <li>Check the camera icon in your browser's address bar</li>
+                      <li>Try refreshing the page and allowing again</li>
+                      <li>Check browser settings: Settings → Privacy & Security → Camera</li>
+                    </ul>
+                  </div>
+                )}
+                
+                {error.includes('No camera') && (
+                  <div className="text-sm text-red-600 bg-red-100 p-3 rounded-lg">
+                    <p className="font-medium mb-2">🔧 Camera connection:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs">
+                      <li>Make sure your camera is connected and turned on</li>
+                      <li>Close other apps that might be using the camera</li>
+                      <li>Try unplugging and reconnecting external cameras</li>
+                      <li>Refresh the page after connecting your camera</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setError("")}
-                className="ml-auto text-red-500 hover:text-red-700"
+                className="ml-auto text-red-500 hover:text-red-700 flex-shrink-0"
               >
                 ×
               </button>
@@ -342,7 +411,7 @@ export default function ExamGettingReady() {
                 ) : (
                   <Camera className="w-5 h-5" />
                 )}
-                {testingCameras ? 'Testing Camera...' : 'Test Camera'}
+                {testingCameras ? 'Testing Camera...' : (error ? 'Try Again' : 'Test Camera')}
               </button>
               
               <button
@@ -352,7 +421,29 @@ export default function ExamGettingReady() {
                 <RefreshCw className="w-5 h-5" />
                 Reset
               </button>
+              
+              {/* Skip monitoring option for critical issues */}
+              {error && (error.includes('HTTPS') || error.includes('browser') || error.includes('Navigator not available')) && (
+                <button
+                  onClick={() => setCurrentStep(4)}
+                  className="px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition flex items-center gap-2"
+                  title="Continue without camera monitoring (not recommended)"
+                >
+                  <AlertTriangle className="w-5 h-5" />
+                  Skip Monitoring
+                </button>
+              )}
             </div>
+            
+            {/* Additional help for persistent issues */}
+            {error && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Still having issues?</strong> Try refreshing your browser, 
+                  ensuring you're using a supported browser, or contact your instructor for assistance.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

@@ -2,17 +2,48 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { apiGetAdminExams, apiDeleteExam, apiUpdateExam } from "../../api";
-import { Plus, Pencil, Trash2, Copy, Eye, EyeOff, Loader2, FileText, Clock, Users as UsersIcon } from "lucide-react";
+import { 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  Copy, 
+  Eye, 
+  EyeOff, 
+  Loader2, 
+  FileText, 
+  Clock, 
+  Users as UsersIcon,
+  Monitor,
+  Camera,
+  Activity,
+  AlertCircle
+} from "lucide-react";
 
 export default function AdminExams() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [monitoringStats, setMonitoringStats] = useState({
+    activeExams: 0,
+    monitoredStudents: 0,
+    totalCameras: 0
+  });
   const navigate = useNavigate();
 
   const load = () => {
     setLoading(true);
     apiGetAdminExams()
-      .then(exams => setExams(exams.filter(e => !e.is_deleted)))
+      .then(exams => {
+        const filteredExams = exams.filter(e => !e.is_deleted);
+        setExams(filteredExams);
+        
+        // Calculate monitoring stats
+        const activeExams = filteredExams.filter(e => e.status === 'published' && e.is_active);
+        setMonitoringStats({
+          activeExams: activeExams.length,
+          monitoredStudents: activeExams.reduce((sum, e) => sum + (e.active_students || 0), 0),
+          totalCameras: activeExams.reduce((sum, e) => sum + (e.active_students || 0) * 2, 0) // 2 cameras per student
+        });
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -81,13 +112,55 @@ export default function AdminExams() {
       <div className="p-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Exam Management</h1>
-          <button
-            onClick={() => navigate("/admin/exams/new")}
-            className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-red-700 transition shadow-sm"
-          >
-            <Plus size={18} />
-            <span>New Exam</span>
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate("/admin/monitoring")}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-blue-700 transition shadow-sm"
+            >
+              <Monitor size={18} />
+              <span>Live Monitoring</span>
+            </button>
+            <button
+              onClick={() => navigate("/admin/exams/new")}
+              className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-red-700 transition shadow-sm"
+            >
+              <Plus size={18} />
+              <span>New Exam</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Monitoring Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Active Exams</p>
+                <p className="text-2xl font-bold text-blue-600">{monitoringStats.activeExams}</p>
+              </div>
+              <Activity className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Monitored Students</p>
+                <p className="text-2xl font-bold text-green-600">{monitoringStats.monitoredStudents}</p>
+              </div>
+              <UsersIcon className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Active Cameras</p>
+                <p className="text-2xl font-bold text-purple-600">{monitoringStats.totalCameras}</p>
+              </div>
+              <Camera className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -110,8 +183,7 @@ export default function AdminExams() {
             {exams.map((exam) => (
               <div
                 key={exam.id}
-                onClick={() => navigate(`/admin/exams/${exam.id}/edit`)}
-                className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-red-200 transition cursor-pointer"
+                className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-red-200 transition"
               >
                 {/* Header with title and actions */}
                 <div className="flex items-start justify-between mb-3">
@@ -135,6 +207,16 @@ export default function AdminExams() {
                         <EyeOff className="w-4 h-4 text-green-600" /> : 
                         <Eye className="w-4 h-4 text-gray-400" />
                       }
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/admin/exams/${exam.id}/edit`);
+                      }}
+                      className="p-1.5 hover:bg-blue-100 rounded transition"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4 text-blue-600" />
                     </button>
                     <button
                       onClick={(e) => handleDelete(exam.id, e)}
@@ -181,15 +263,74 @@ export default function AdminExams() {
                   <div className="flex flex-col">
                     <div className="flex items-center space-x-1 text-gray-500 mb-1">
                       <UsersIcon className="w-3.5 h-3.5" />
-                      <span className="text-xs">Submissions</span>
+                      <span className="text-xs">Active</span>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900">{exam.submission_count}</span>
+                    <span className="text-sm font-semibold text-gray-900">{exam.active_students || 0}</span>
                   </div>
                 </div>
 
-                {/* Footer with status */}
+                {/* Monitoring Status */}
+                {exam.status === 'published' && exam.is_active && (
+                  <div className="mb-3 p-2 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-green-700 font-medium">Live Monitoring</span>
+                        </div>
+                        <span className="text-gray-600">
+                          {(exam.active_students || 0) * 2} cameras active
+                        </span>
+                      </div>
+                      <Camera className="w-4 h-4 text-blue-600" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer with status and actions */}
                 <div className="pt-3 border-t border-gray-100">
-                  {statusBadge(exam.status)}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {statusBadge(exam.status)}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      {exam.status === 'published' && exam.is_active && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/exams/${exam.id}/monitor`);
+                          }}
+                          className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 transition flex items-center gap-1"
+                          title="Live Monitoring"
+                        >
+                          <Monitor className="w-3 h-3" />
+                          Monitor
+                        </button>
+                      )}
+                      
+                      {exam.status === 'published' && !exam.is_active && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/submissions?examId=${exam.id}`);
+                          }}
+                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition flex items-center gap-1"
+                          title="View Results"
+                        >
+                          <Activity className="w-3 h-3" />
+                          Results
+                        </button>
+                      )}
+
+                      {exam.status === 'draft' && (
+                        <div className="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-medium flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Draft
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

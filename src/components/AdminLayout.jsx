@@ -12,12 +12,14 @@ import {
   School,
   Activity,
   Trash2,
+  Monitor,
 } from "lucide-react";
 
 // Navigation items for admin sidebar
 const navItems = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/exams", label: "Exams", icon: FileText },
+  { to: "/admin/monitoring", label: "Live Monitoring", icon: Monitor },
   { to: "/admin/submissions", label: "Submissions", icon: ClipboardList },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/classrooms", label: "Classrooms", icon: School },

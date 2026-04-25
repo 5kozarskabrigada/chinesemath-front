@@ -1,4 +1,4 @@
-const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:4000";
+const BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : "http://localhost:4000");
 
 function getToken() {
   return localStorage.getItem("math_token");
