@@ -46,11 +46,8 @@ export default function AdminDashboard() {
       .catch(console.error)
       .finally(() => setLoading(false));
 
-    // Initialize monitoring socket (disabled until backend Socket.IO is implemented)
+    // Initialize monitoring socket
     const initializeMonitoring = () => {
-      // Temporarily disabled - backend Socket.IO not yet implemented
-      return;
-      
       const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
       socketRef.current = io(baseURL, {
         query: { type: 'admin_dashboard' },
