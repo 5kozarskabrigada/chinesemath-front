@@ -43,9 +43,13 @@ class CameraService {
 
   // Initialize socket connection for real-time monitoring
   async initializeSocket(examId, studentId) {
+    // Socket.IO monitoring disabled until backend implementation
+    console.log('Camera monitoring socket disabled - backend Socket.IO not yet implemented');
+    return Promise.resolve();
+    
     try {
-      // Use environment variable or fallback to localhost
-      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+      // Use environment variable or fallback to current origin
+      const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
       
       console.log('Attempting to connect to monitoring server:', baseURL);
       
@@ -53,8 +57,8 @@ class CameraService {
         query: { examId, studentId, type: 'student' },
         timeout: 10000,
         forceNew: true,
-        reconnection: true,
-        reconnectionAttempts: 3,
+        reconnection: false,
+        reconnectionAttempts: 1,
         reconnectionDelay: 2000
       });
 

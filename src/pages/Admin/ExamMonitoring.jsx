@@ -30,11 +30,18 @@ export default function ExamMonitoring() {
 
   useEffect(() => {
     const initializeMonitoring = async () => {
+      // Don't initialize if examId is missing
+      if (!examId || examId === 'undefined') {
+        console.warn('ExamMonitoring: examId is missing, skipping socket connection');
+        return;
+      }
+
       try {
         // Initialize socket connection for admin monitoring
-        const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+        const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
         socketRef.current = io(baseURL, {
-          query: { examId, type: 'admin' }
+          query: { examId, type: 'admin' },
+          reconnection: false // Disable auto-reconnect to prevent spam
         });
 
         socketRef.current.on('connect', () => {
