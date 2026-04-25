@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
 import { renderMath } from "../../utils/math";
 import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
@@ -8,6 +9,7 @@ import CameraService from "../../services/CameraService";
 export default function ExamPlayer() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -40,7 +42,7 @@ export default function ExamPlayer() {
 
           // Initialize camera monitoring
           try {
-            await CameraService.initializeSocket(examId, 'current_student_id');
+            await CameraService.initializeSocket(examId, user?.id || 'unknown');
             await CameraService.initializeLaptopCamera();
           } catch (error) {
             console.warn('Camera initialization failed:', error);
