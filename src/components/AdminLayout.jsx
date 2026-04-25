@@ -43,7 +43,7 @@ export default function AdminLayout({ children }) {
       <aside
         className={`${
           collapsed ? "w-16" : "w-64"
-        } bg-white border-r border-gray-100 flex flex-col shadow-sm transition-all duration-300 overflow-hidden`}
+        } h-screen bg-white border-r border-gray-100 flex flex-col shadow-sm transition-all duration-300 overflow-hidden sticky top-0`}
       >
         {/* Header */}
         <div className={`border-b border-gray-100 flex items-center ${collapsed ? "p-3 justify-center" : "p-4 justify-between"}`}>
