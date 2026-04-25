@@ -75,7 +75,6 @@ export default function PhoneCameraSetup() {
   const notifyCameraReady = () => {
     if (CameraService.socket) {
       CameraService.socket.emit('phone_camera_ready', { examId, studentId });
-      setPhoneCameraReady(true);
     }
   };
 
