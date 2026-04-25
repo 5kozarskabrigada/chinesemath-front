@@ -73,20 +73,34 @@ export default function PhoneCameraSetup() {
     setInstructions(false);
   };
 
-  const notifyCameraReady = () => {
+  const notifyCameraReady = async () => {
     console.log('Camera Ready button clicked, examId:', examId, 'studentId:', studentId);
     console.log('Socket connected:', !!CameraService.socket);
 
+    // Try Socket.IO first
     if (CameraService.socket) {
       CameraService.socket.emit('phone_camera_ready', { examId, studentId });
-      setNotificationSent(true);
-      console.log('Emitted phone_camera_ready event');
+      console.log('Emitted phone_camera_ready event via Socket.IO');
+    }
 
-      // Reset after 3 seconds
-      setTimeout(() => setNotificationSent(false), 3000);
-    } else {
-      console.error('Socket not connected');
-      setError('Not connected to monitoring system. Please refresh the page.');
+    // Fallback: use API endpoint
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/exams/${examId}/phone-camera-ready`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ studentId })
+      });
+      if (response.ok) {
+        console.log('Phone camera ready status set via API');
+        setNotificationSent(true);
+        setTimeout(() => setNotificationSent(false), 3000);
+      }
+    } catch (error) {
+      console.error('Failed to set phone camera ready via API:', error);
+      setError('Failed to notify laptop. Please try again.');
     }
   };
 

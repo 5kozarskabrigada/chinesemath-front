@@ -114,10 +114,34 @@ export default function ExamGettingReady() {
       });
     }
 
+    // Poll API endpoint as fallback for phone camera ready status
+    const pollPhoneCameraReady = async () => {
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/exams/${examId}/phone-camera-ready/${user?.id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ready) {
+            console.log('Phone camera ready via API poll');
+            setPhoneCameraReady(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll phone camera ready status:', error);
+      }
+    };
+
+    // Poll every 2 seconds
+    const pollInterval = setInterval(pollPhoneCameraReady, 2000);
+
     return () => {
       if (CameraService.socket) {
         CameraService.socket.off('phone_camera_ready');
       }
+      clearInterval(pollInterval);
       if (healthCheckInterval.current) {
         clearInterval(healthCheckInterval.current);
       }
