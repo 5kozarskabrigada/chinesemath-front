@@ -72,6 +72,13 @@ export default function PhoneCameraSetup() {
     setInstructions(false);
   };
 
+  const notifyCameraReady = () => {
+    if (CameraService.socket) {
+      CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+      setPhoneCameraReady(true);
+    }
+  };
+
   const switchCamera = async () => {
     setSwitching(true);
     try {
@@ -202,28 +209,37 @@ export default function PhoneCameraSetup() {
                   {cameraReady ? 'Camera Active' : 'Camera Inactive'}
                 </span>
               </div>
-              
+
               <div className="text-white text-xs">
                 Exam Monitoring
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom Status */}
-        <div className="absolute bottom-4 left-4 right-4 z-10">
-          <div className="bg-black bg-opacity-75 rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Camera className="w-5 h-5 text-white" />
-              <span className="text-white font-medium">Desk Monitoring Active</span>
-            </div>
-            <p className="text-gray-300 text-xs mb-3">
-              Keep this tab open and phone stable during the entire exam
-            </p>
+      {/* Bottom Status */}
+      <div className="absolute bottom-4 left-4 right-4 z-10">
+        <div className="bg-black bg-opacity-75 rounded-lg p-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Camera className="w-5 h-5 text-white" />
+            <span className="text-white font-medium">Desk Monitoring Active</span>
+          </div>
+          <p className="text-gray-300 text-xs mb-3">
+            Keep this tab open and phone stable during the entire exam
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={notifyCameraReady}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Camera Ready
+            </button>
             <button
               onClick={switchCamera}
               disabled={switching}
-              className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {switching ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -234,18 +250,18 @@ export default function PhoneCameraSetup() {
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Warning: Keep Screen On */}
-        <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10">
-          <div className="bg-yellow-500 bg-opacity-90 rounded-lg p-3 max-w-xs">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-900 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="text-yellow-900 font-medium text-sm">Keep Screen Active</h3>
-                <p className="text-yellow-800 text-xs">
-                  Adjust your phone settings to prevent auto-lock during the exam
-                </p>
-              </div>
+      {/* Warning: Keep Screen On */}
+      <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10">
+        <div className="bg-yellow-500 bg-opacity-90 rounded-lg p-3 max-w-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-900 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-yellow-900 font-medium text-sm">Keep Screen Active</h3>
+              <p className="text-yellow-800 text-xs">
+                Adjust your phone settings to prevent auto-lock during the exam
+              </p>
             </div>
           </div>
         </div>
