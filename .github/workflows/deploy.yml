@@ -18,6 +18,7 @@ jobs:
           script: |
             cd /opt/chinesemath/frontend
             git pull
-            cd /opt/chinesemath
-            docker compose build frontend
-            docker compose up -d frontend
+            docker build -t chinesemath-frontend .
+            docker stop chinesemath-frontend || true
+            docker rm chinesemath-frontend || true
+            docker run -d -p 3000:3000 --name chinesemath-frontend chinesemath-frontend
