@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Camera, CheckCircle, AlertTriangle, Loader2, Smartphone } from "lucide-react";
+import { Camera, CheckCircle, AlertTriangle, Loader2, Smartphone, RefreshCw } from "lucide-react";
 import CameraService from "../../services/CameraService";
 
 export default function PhoneCameraSetup() {
@@ -9,6 +9,8 @@ export default function PhoneCameraSetup() {
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(true);
   const [instructions, setInstructions] = useState(true);
+  const [facingMode, setFacingMode] = useState('environment'); // 'user' for front, 'environment' for back
+  const [switching, setSwitching] = useState(false);
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -62,6 +64,40 @@ export default function PhoneCameraSetup() {
 
   const dismissInstructions = () => {
     setInstructions(false);
+  };
+
+  const switchCamera = async () => {
+    setSwitching(true);
+    try {
+      // Stop current camera
+      CameraService.cleanup();
+      setCameraReady(false);
+
+      // Switch facing mode
+      const newFacingMode = facingMode === 'environment' ? 'user' : 'environment';
+      setFacingMode(newFacingMode);
+
+      // Initialize camera with new facing mode
+      const constraints = {
+        video: {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          facingMode: newFacingMode
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      CameraService.phoneStream = stream;
+      setCameraReady(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      setError("Failed to switch camera: " + error.message);
+    } finally {
+      setSwitching(false);
+    }
   };
 
   if (connecting) {
@@ -170,9 +206,21 @@ export default function PhoneCameraSetup() {
               <Camera className="w-5 h-5 text-white" />
               <span className="text-white font-medium">Desk Monitoring Active</span>
             </div>
-            <p className="text-gray-300 text-xs">
+            <p className="text-gray-300 text-xs mb-3">
               Keep this tab open and phone stable during the entire exam
             </p>
+            <button
+              onClick={switchCamera}
+              disabled={switching}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+            >
+              {switching ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Switch Camera
+            </button>
           </div>
         </div>
 
