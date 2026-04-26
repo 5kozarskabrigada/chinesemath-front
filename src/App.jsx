@@ -27,6 +27,11 @@ function ExamPlayerKeyed() {
   return <ExamPlayer key={examId} />;
 }
 
+function ExamMonitoringKeyed() {
+  const { examId } = useParams();
+  return <ExamMonitoring examId={examId} />;
+}
+
 function PrivateRoute({ children, role }) {
   const { user, token } = useAuth();
   if (!token || !user) return <Navigate to="/login" replace />;
@@ -96,7 +101,7 @@ function App() {
           />
           <Route
             path="/admin/exams/:examId/monitor"
-            element={<PrivateRoute role="admin"><ExamMonitoring /></PrivateRoute>}
+            element={<PrivateRoute role="admin"><ExamMonitoringKeyed /></PrivateRoute>}
           />
 
           {/* Student */}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Camera, CheckCircle, AlertTriangle, Loader2, Smartphone } from "lucide-react";
+import { Camera, CheckCircle, AlertTriangle, Loader2, Smartphone, RefreshCw } from "lucide-react";
 import CameraService from "../../services/CameraService";
 
 export default function PhoneCameraSetup() {
@@ -9,6 +9,9 @@ export default function PhoneCameraSetup() {
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(true);
   const [instructions, setInstructions] = useState(true);
+  const [facingMode, setFacingMode] = useState('environment'); // 'user' for front, 'environment' for back
+  const [switching, setSwitching] = useState(false);
+  const [notificationSent, setNotificationSent] = useState(false);
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -25,17 +28,34 @@ export default function PhoneCameraSetup() {
           onError: setError
         });
 
+        // Add timeout for connection
+        const timeout = setTimeout(() => {
+          if (connecting) {
+            setError("Connection timeout. Please check your internet and try again.");
+            setConnecting(false);
+          }
+        }, 15000); // 15 second timeout
+
         // Initialize socket connection
         const connected = await CameraService.initializeSocket(examId, studentId);
         if (!connected) {
+          clearTimeout(timeout);
           setError("Failed to connect to monitoring system");
           return;
         }
 
+        clearTimeout(timeout);
+
         // Initialize phone camera
         await CameraService.initializePhoneCamera();
+
+        // Emit socket event to notify laptop that phone camera is ready
+        if (CameraService.socket) {
+          CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+        }
+
         setConnecting(false);
-        
+
       } catch (error) {
         setError("Failed to access phone camera: " + error.message);
         setConnecting(false);
@@ -47,10 +67,87 @@ export default function PhoneCameraSetup() {
     return () => {
       CameraService.cleanup();
     };
-  }, [examId, studentId]);
+  }, [examId, studentId, connecting]);
 
   const dismissInstructions = () => {
     setInstructions(false);
+  };
+
+  const notifyCameraReady = async () => {
+    console.log('Camera Ready button clicked, examId:', examId, 'studentId:', studentId);
+    console.log('Socket connected:', !!CameraService.socket);
+
+    // Try Socket.IO first
+    if (CameraService.socket) {
+      CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+      console.log('Emitted phone_camera_ready event via Socket.IO');
+    }
+
+    // Fallback: use API endpoint
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/phone-camera/ready`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ examId, studentId })
+      });
+      if (response.ok) {
+        console.log('Phone camera ready status set via API');
+        setNotificationSent(true);
+        setTimeout(() => setNotificationSent(false), 3000);
+      }
+    } catch (error) {
+      console.error('Failed to set phone camera ready via API:', error);
+      setError('Failed to notify laptop. Please try again.');
+    }
+  };
+
+  const switchCamera = async () => {
+    setSwitching(true);
+    try {
+      // Only stop the camera stream, not the socket
+      if (CameraService.phoneStream) {
+        CameraService.phoneStream.getTracks().forEach(track => track.stop());
+        CameraService.phoneStream = null;
+      }
+      setCameraReady(false);
+
+      // Switch facing mode
+      const newFacingMode = facingMode === 'environment' ? 'user' : 'environment';
+      setFacingMode(newFacingMode);
+
+      // Initialize camera with new facing mode
+      const constraints = {
+        video: {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          facingMode: newFacingMode
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      CameraService.phoneStream = stream;
+      setCameraReady(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // Reconnect socket if disconnected
+      if (!CameraService.socket) {
+        await CameraService.initializeSocket(examId, studentId);
+      }
+
+      // Emit socket event to notify laptop that phone camera is ready
+      if (CameraService.socket) {
+        CameraService.socket.emit('phone_camera_ready', { examId, studentId });
+      }
+    } catch (error) {
+      setError("Failed to switch camera: " + error.message);
+    } finally {
+      setSwitching(false);
+    }
   };
 
   if (connecting) {
@@ -144,38 +241,59 @@ export default function PhoneCameraSetup() {
                   {cameraReady ? 'Camera Active' : 'Camera Inactive'}
                 </span>
               </div>
-              
+
               <div className="text-white text-xs">
                 Exam Monitoring
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom Status */}
-        <div className="absolute bottom-4 left-4 right-4 z-10">
-          <div className="bg-black bg-opacity-75 rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Camera className="w-5 h-5 text-white" />
-              <span className="text-white font-medium">Desk Monitoring Active</span>
-            </div>
-            <p className="text-gray-300 text-xs">
-              Keep this tab open and phone stable during the entire exam
-            </p>
+      {/* Bottom Status */}
+      <div className="absolute bottom-4 left-4 right-4 z-10">
+        <div className="bg-black bg-opacity-75 rounded-lg p-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Camera className="w-5 h-5 text-white" />
+            <span className="text-white font-medium">Desk Monitoring Active</span>
+          </div>
+          <p className="text-gray-300 text-xs mb-3">
+            Keep this tab open and phone stable during the entire exam
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={notifyCameraReady}
+              className={`${notificationSent ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              {notificationSent ? 'Sent!' : 'Camera Ready'}
+            </button>
+            <button
+              onClick={switchCamera}
+              disabled={switching}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {switching ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Switch Camera
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Warning: Keep Screen On */}
-        <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10">
-          <div className="bg-yellow-500 bg-opacity-90 rounded-lg p-3 max-w-xs">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-900 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="text-yellow-900 font-medium text-sm">Keep Screen Active</h3>
-                <p className="text-yellow-800 text-xs">
-                  Adjust your phone settings to prevent auto-lock during the exam
-                </p>
-              </div>
+      {/* Warning: Keep Screen On */}
+      <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10">
+        <div className="bg-yellow-500 bg-opacity-90 rounded-lg p-3 max-w-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-900 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-yellow-900 font-medium text-sm">Keep Screen Active</h3>
+              <p className="text-yellow-800 text-xs">
+                Adjust your phone settings to prevent auto-lock during the exam
+              </p>
             </div>
           </div>
         </div>

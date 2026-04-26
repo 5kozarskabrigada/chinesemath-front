@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
 import { renderMath } from "../../utils/math";
 import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import CameraService from "../../services/CameraService";
 
 export default function ExamPlayer() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -27,15 +30,24 @@ export default function ExamPlayer() {
 
   useEffect(() => {
     apiGetExamQuestions(examId)
-      .then(({ exam: e, questions: qs }) => {
+      .then(async ({ exam: e, questions: qs }) => {
         setExam(e);
         setQuestions(qs);
         setTimeLeft(e.duration_minutes * 60);
-        
+
         // Log exam started only once
         if (!hasLoggedStartRef.current) {
           logEvent("exam_started", { examTitle: e.title, questionCount: qs.length });
           hasLoggedStartRef.current = true;
+
+          // Initialize camera monitoring
+          try {
+            await CameraService.initializeSocket(examId, user?.id || 'unknown');
+            await CameraService.initializeLaptopCamera();
+          } catch (error) {
+            console.warn('Camera initialization failed:', error);
+            // Allow exam to continue even if camera fails
+          }
         }
       })
       .catch((err) => setError(err.message))
@@ -117,21 +129,20 @@ export default function ExamPlayer() {
         }
       }
       setSubmitting(true);
-      const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
       try {
+        const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
         await apiSubmitExam(examId, answers, timeSpent);
-        
-        // Log exam submission
-        logEvent("exam_submitted", { 
-          timeSpent, 
-          answeredCount: Object.keys(answers).length,
+        logEvent("exam_submitted", {
+          answerCount: Object.keys(answers).length,
           totalQuestions: questions.length,
-          autoSubmit 
+          timeSpent,
+          autoSubmit
         });
-        
+        CameraService.cleanup();
         navigate(`/student/exam/${examId}/result`);
-      } catch (err) {
-        setError(err.message);
+      } catch (error) {
+        setError(error.message);
+      } finally {
         setSubmitting(false);
       }
     },

@@ -6,6 +6,7 @@ class CameraService {
     this.laptopStream = null;
     this.phoneStream = null;
     this.socket = null;
+
     this.peerId = null;
     this.isConnected = false;
     this.callbacks = {
@@ -43,12 +44,8 @@ class CameraService {
 
   // Initialize socket connection for real-time monitoring
   async initializeSocket(examId, studentId) {
-    // Socket.IO monitoring disabled until backend implementation
-    console.log('Camera monitoring socket disabled - backend Socket.IO not yet implemented');
-    return Promise.resolve();
-    
     try {
-      // Use environment variable or fallback to current origin
+      // Use environment variable or fallback to same-origin
       const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
       
       console.log('Attempting to connect to monitoring server:', baseURL);
@@ -177,7 +174,7 @@ class CameraService {
   // Generate QR code URL for phone camera
   generatePhoneURL(examId, studentId) {
     const baseURL = window.location.origin;
-    const phoneURL = `${baseURL}/phone-camera/${examId}/${studentId}`;
+    const phoneURL = `${baseURL}/3/phone-camera/${examId}/${studentId}`;
     return phoneURL;
   }
 

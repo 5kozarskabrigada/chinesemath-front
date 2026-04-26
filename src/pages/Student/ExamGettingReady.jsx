@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../authContext";
 import QRCode from "react-qr-code";
 import { 
   Camera, 
@@ -20,6 +21,7 @@ import { apiGetExam } from "../../api";
 export default function ExamGettingReady() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // State management
   const [exam, setExam] = useState(null);
@@ -41,7 +43,7 @@ export default function ExamGettingReady() {
   const healthCheckInterval = useRef(null);
 
   // Phone camera URL for QR code
-  const phoneURL = CameraService.generatePhoneURL(examId, 'current_student_id');
+  const phoneURL = CameraService.generatePhoneURL(examId, user?.id || 'unknown');
 
   // Load exam data
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function ExamGettingReady() {
       });
 
       // Initialize socket connection
-      const connected = await CameraService.initializeSocket(examId, 'current_student_id');
+      const connected = await CameraService.initializeSocket(examId, user.id);
       if (connected) {
         healthCheckInterval.current = CameraService.startCameraHealthCheck();
       }
@@ -100,40 +102,66 @@ export default function ExamGettingReady() {
 
     initializeCameraService();
 
-    // Listen for phone camera messages
-    const handleMessage = (event) => {
-      if (event.data.type === 'PHONE_CAMERA_READY') {
-        setPhoneCameraReady(true);
+    // Listen for phone camera ready event via Socket.IO
+    if (CameraService.socket) {
+      CameraService.socket.on('phone_camera_ready', (data) => {
+        console.log('Received phone_camera_ready event:', data);
+        console.log('Current user ID:', user?.id);
+        if (data.studentId === user?.id) {
+          setPhoneCameraReady(true);
+          console.log('Phone camera marked as ready');
+        }
+      });
+    }
+
+    // Poll API endpoint as fallback for phone camera ready status
+    const pollPhoneCameraReady = async () => {
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/phone-camera/ready/${examId}/${user?.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ready) {
+            console.log('Phone camera ready via API poll');
+            setPhoneCameraReady(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll phone camera ready status:', error);
       }
     };
 
-    window.addEventListener('message', handleMessage);
+    // Poll every 2 seconds
+    const pollInterval = setInterval(pollPhoneCameraReady, 2000);
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      if (CameraService.socket) {
+        CameraService.socket.off('phone_camera_ready');
+      }
+      clearInterval(pollInterval);
       if (healthCheckInterval.current) {
         clearInterval(healthCheckInterval.current);
       }
       CameraService.cleanup();
     };
-  }, [examId]);
+  }, [examId, user?.id]);
 
   // Handle laptop camera initialization
   const handleLaptopCameraSetup = async () => {
     setTestingCameras(true);
     setError(""); // Clear any previous errors
-    
+
     try {
       const stream = await CameraService.initializeLaptopCamera(selectedCamera);
-      
+
       // Test camera functionality
       const hasContent = await CameraService.testCamera(stream);
       if (!hasContent) {
         setError("Camera appears to be blocked or not working properly");
         return;
       }
-      
-      setCurrentStep(2);
+
+      // Don't auto-redirect - let student manually proceed
+      setLaptopCameraReady(true);
     } catch (error) {
       console.error("Laptop camera setup failed:", error);
       
@@ -400,6 +428,38 @@ export default function ExamGettingReady() {
               </div>
             </div>
 
+            {/* Workspace Rules */}
+            {laptopCameraReady && (
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Camera Setup Rules
+                </h3>
+                <ul className="space-y-2 text-sm text-blue-800">
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span>Make sure your <strong>entire desk/workspace is visible</strong> in the camera</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span>Position the camera to show your <strong>face, hands, and keyboard</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span>Ensure <strong>good lighting</strong> so your face is clearly visible</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span>Remove any unauthorized materials from your desk</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span>Keep your <strong>face visible throughout the exam</strong></span>
+                  </li>
+                </ul>
+              </div>
+            )}
+
             <div className="flex gap-4">
               <button
                 onClick={handleLaptopCameraSetup}
@@ -413,7 +473,7 @@ export default function ExamGettingReady() {
                 )}
                 {testingCameras ? 'Testing Camera...' : (error ? 'Try Again' : 'Test Camera')}
               </button>
-              
+
               <button
                 onClick={resetSetup}
                 className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition flex items-center gap-2"
@@ -421,7 +481,18 @@ export default function ExamGettingReady() {
                 <RefreshCw className="w-5 h-5" />
                 Reset
               </button>
-              
+
+              {/* Continue to phone camera after laptop is ready */}
+              {laptopCameraReady && !error && (
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+                >
+                  <ArrowRight className="w-5 h-5" />
+                  Next: Phone Camera
+                </button>
+              )}
+
               {/* Skip monitoring option for critical issues */}
               {error && (error.includes('HTTPS') || error.includes('browser') || error.includes('Navigator not available')) && (
                 <button
