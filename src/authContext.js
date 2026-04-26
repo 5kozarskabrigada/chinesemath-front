@@ -5,10 +5,25 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("math_user");
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem("math_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      localStorage.removeItem("math_user");
+      localStorage.removeItem("math_token");
+      return null;
+    }
   });
-  const [token, setToken] = useState(() => localStorage.getItem("math_token"));
+  const [token, setToken] = useState(() => {
+    const saved = localStorage.getItem("math_token");
+    if (!saved) return null;
+    try {
+      return saved;
+    } catch (e) {
+      localStorage.removeItem("math_token");
+      return null;
+    }
+  });
 
   useEffect(() => {
     if (user) localStorage.setItem("math_user", JSON.stringify(user));
