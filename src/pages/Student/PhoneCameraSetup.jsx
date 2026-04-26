@@ -85,12 +85,12 @@ export default function PhoneCameraSetup() {
 
     // Fallback: use API endpoint
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/exams/${examId}/phone-camera-ready`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/phone-camera/ready`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ studentId })
+        body: JSON.stringify({ examId, studentId })
       });
       if (response.ok) {
         console.log('Phone camera ready status set via API');

@@ -117,7 +117,7 @@ export default function ExamGettingReady() {
     // Poll API endpoint as fallback for phone camera ready status
     const pollPhoneCameraReady = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/exams/${examId}/phone-camera-ready/${user?.id}`);
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/phone-camera/ready/${examId}/${user?.id}`);
         if (response.ok) {
           const data = await response.json();
           if (data.ready) {
