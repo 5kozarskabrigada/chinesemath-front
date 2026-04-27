@@ -175,6 +175,12 @@ export async function apiGetExamLogStats(filters = {}) {
   return request(`/api/admin/logs/stats${query ? `?${query}` : ""}`);
 }
 
+// ─── Admin: Monitoring Events ────────────────────────────────────────────────
+
+export async function apiGetMonitoringEvents(examId) {
+  return request(`/api/admin/exams/${examId}/monitoring-events`);
+}
+
 // ─── Admin: Recycle Bin ──────────────────────────────────────────────────────
 
 export async function apiGetRecycleBin() {

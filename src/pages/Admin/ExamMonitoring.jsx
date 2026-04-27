@@ -22,7 +22,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import io from 'socket.io-client';
-import { apiGetAdminExams } from "../../api";
+import { apiGetAdminExams, apiGetMonitoringEvents } from "../../api";
 
 export default function ExamMonitoring({ examId: examIdProp }) {
   const { examId: examIdParam } = useParams();
@@ -62,6 +62,70 @@ export default function ExamMonitoring({ examId: examIdProp }) {
         .catch(err => console.error('Failed to fetch exams:', err))
         .finally(() => setLoadingExams(false));
     }
+  }, [examId]);
+
+  // Load persisted monitoring events from DB
+  useEffect(() => {
+    if (!examId || examId === 'undefined') return;
+    apiGetMonitoringEvents(examId)
+      .then(events => {
+        const msgs = [];
+        const alertItems = [];
+        const knownStudents = new Map();
+
+        (events || []).forEach(ev => {
+          const data = ev.event_data || {};
+          const studentName = [ev.first_name, ev.last_name].filter(Boolean).join(' ') || ev.username || ev.student_id || 'Unknown';
+
+          if (ev.event_type === 'monitoring_message') {
+            msgs.push({
+              id: ev.id,
+              studentId: ev.student_id,
+              studentName,
+              message: data.message,
+              messageType: data.messageType,
+              timestamp: new Date(ev.created_at)
+            });
+          } else if (ev.event_type === 'monitoring_disqualify') {
+            alertItems.push({
+              id: ev.id,
+              type: 'disqualify',
+              studentId: ev.student_id,
+              message: `${studentName} was disqualified`,
+              timestamp: new Date(ev.created_at)
+            });
+          } else if (ev.event_type === 'monitoring_violation') {
+            alertItems.push({
+              id: ev.id,
+              type: 'violation',
+              studentId: ev.student_id,
+              message: `${studentName}: ${data.type} (severity: ${data.severity})`,
+              timestamp: new Date(ev.created_at)
+            });
+          }
+
+          // Track students who have joined
+          if (ev.event_type === 'monitoring_student_joined' && ev.student_id) {
+            knownStudents.set(ev.student_id, {
+              id: ev.student_id,
+              name: studentName,
+              connected: false,
+              laptopCamera: { active: false },
+              phoneCamera: { active: false }
+            });
+          }
+        });
+
+        if (msgs.length > 0) setMessageHistory(prev => prev.length === 0 ? msgs.reverse() : prev);
+        if (alertItems.length > 0) setAlerts(prev => prev.length === 0 ? alertItems.reverse() : prev);
+        if (knownStudents.size > 0) {
+          setStudents(prev => {
+            if (prev.length > 0) return prev;
+            return Array.from(knownStudents.values());
+          });
+        }
+      })
+      .catch(err => console.error('Failed to load monitoring events:', err));
   }, [examId]);
 
   useEffect(() => {
