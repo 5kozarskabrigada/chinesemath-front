@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent, apiCheckExamStatus } from "../../api";
 import { renderMath } from "../../utils/math";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize, Star } from "lucide-react";
 import CameraService from "../../services/CameraService";
 import QRCode from "react-qr-code";
 
@@ -21,6 +21,8 @@ export default function ExamPlayer() {
   const [error, setError] = useState("");
   const [adminMessage, setAdminMessage] = useState(null);
   const [examTerminated, setExamTerminated] = useState(false);
+  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [isFullscreenBlocked, setIsFullscreenBlocked] = useState(false);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
   const examStartTimeRef = useRef(null);
@@ -106,6 +108,7 @@ export default function ExamPlayer() {
               const state = JSON.parse(savedState);
               setAnswers(state.answers || {});
               setCurrent(state.current || 0);
+              setMarkedForReview(new Set(state.markedForReview || []));
               
               // Calculate remaining time based on saved start time
               if (savedStartTime) {
@@ -203,6 +206,7 @@ export default function ExamPlayer() {
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         logEvent("fullscreen_exit_violation", { timestamp: new Date().toISOString() });
+        setIsFullscreenBlocked(true);
         // Force fullscreen back
         const enterFullscreen = async () => {
           try {
@@ -220,6 +224,7 @@ export default function ExamPlayer() {
         enterFullscreen();
       } else {
         logEvent("fullscreen_enter");
+        setIsFullscreenBlocked(false);
       }
     };
 
@@ -341,11 +346,12 @@ export default function ExamPlayer() {
       const state = {
         answers,
         current,
+        markedForReview: Array.from(markedForReview),
         timestamp: Date.now()
       };
       localStorage.setItem(`exam_${examId}_state`, JSON.stringify(state));
     }
-  }, [answers, current, examId, questions.length]);
+  }, [answers, current, markedForReview, examId, questions.length]);
 
   // Cleanup localStorage on submit
   useEffect(() => {
@@ -395,6 +401,22 @@ export default function ExamPlayer() {
     const m = Math.floor(sec / 60).toString().padStart(2, "0");
     const s = (sec % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
+  };
+
+  const toggleMarkForReview = (questionId) => {
+    setMarkedForReview(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) {
+        newSet.delete(questionId);
+      } else {
+        newSet.add(questionId);
+      }
+      return newSet;
+    });
+  };
+
+  const goToQuestion = (index) => {
+    setCurrent(index);
   };
 
   if (loading) {
@@ -461,16 +483,56 @@ export default function ExamPlayer() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Fullscreen blocking overlay */}
+      {isFullscreenBlocked && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 text-center max-w-md">
+            <AlertTriangle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
+            <p className="text-gray-600 mb-6">You must be in fullscreen mode to continue the exam. Please click below to re-enter fullscreen.</p>
+            <button
+              onClick={async () => {
+                try {
+                  if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                  } else if (document.documentElement.webkitRequestFullscreen) {
+                    await document.documentElement.webkitRequestFullscreen();
+                  } else if (document.documentElement.msRequestFullscreen) {
+                    await document.documentElement.msRequestFullscreen();
+                  }
+                } catch (error) {
+                  console.error('Fullscreen request failed:', error);
+                }
+              }}
+              className="bg-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-700 transition"
+            >
+              Enter Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
             <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
           </div>
-          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
-            <Clock size={14} />
-            <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => toggleMarkForReview(questions[current]?.id)}
+              className={`p-2 rounded-lg transition ${
+                markedForReview.has(questions[current]?.id) ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}
+              title="Mark for review"
+            >
+              <Star size={18} className={markedForReview.has(questions[current]?.id) ? 'fill-current' : ''} />
+            </button>
+            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
+              <Clock size={14} />
+              <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -510,7 +572,7 @@ export default function ExamPlayer() {
 
       {/* Phone QR Code for reconnection */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Smartphone size={18} className="text-gray-500" />
             <div className="text-sm text-gray-600">
@@ -527,69 +589,125 @@ export default function ExamPlayer() {
         </div>
       </div>
 
-      {/* Question body */}
-      <div className="flex-1 max-w-3xl mx-auto w-full px-6 py-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-          <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-3">
-            Question {current + 1} of {questions.length}
-          </p>
-          <div
-            className="text-gray-800 text-base leading-relaxed mb-6"
-            dangerouslySetInnerHTML={{ __html: renderMath(q.question_text) }}
-          />
-
-          <div className="space-y-3">
-            {(typeof q.options === "string" ? JSON.parse(q.options) : q.options).map((opt) => {
-              const selected = answers[q.id] === opt.label;
+      {/* Main content with sidebar */}
+      <div className="flex-1 flex max-w-7xl mx-auto w-full">
+        {/* Question navigation sidebar */}
+        <div className="w-64 bg-white border-r border-gray-100 p-4 overflow-y-auto">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Questions</h3>
+          <div className="grid grid-cols-6 gap-2">
+            {Array.from({ length: 48 }, (_, i) => {
+              const question = questions[i];
+              const isAnswered = question && answers[question.id];
+              const isMarked = question && markedForReview.has(question.id);
+              const isCurrent = i === current;
+              
               return (
                 <button
-                  key={opt.label}
-                  onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: opt.label }))}
-                  className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm transition-all ${
-                    selected
-                      ? "border-red-500 bg-red-50 text-red-800"
-                      : "border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-white"
-                  }`}
+                  key={i}
+                  onClick={() => goToQuestion(i)}
+                  disabled={!question}
+                  className={`
+                    w-10 h-10 rounded-lg text-sm font-medium transition relative
+                    ${isCurrent ? 'ring-2 ring-red-500' : ''}
+                    ${!question ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : ''}
+                    ${isAnswered ? 'bg-green-100 text-green-700' : 'bg-gray-50 text-gray-700'}
+                    ${isMarked ? 'bg-yellow-100 text-yellow-700' : ''}
+                    hover:opacity-80
+                  `}
+                  title={question ? `Question ${i + 1}` : 'Not available'}
                 >
-                  <span className={`inline-flex w-7 h-7 rounded-lg mr-3 items-center justify-center text-xs font-bold ${selected ? "bg-red-500 text-white" : "bg-gray-200 text-gray-600"}`}>
-                    {opt.label}
-                  </span>
-                  <span dangerouslySetInnerHTML={{ __html: renderMath(opt.text) }} />
+                  {i + 1}
+                  {isMarked && (
+                    <Star size={8} className="absolute top-0.5 right-0.5 fill-current text-yellow-600" />
+                  )}
                 </button>
               );
             })}
           </div>
+          
+          {/* Legend */}
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <div className="space-y-2 text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-green-100" />
+                <span>Answered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-yellow-100" />
+                <span>Marked for review</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-gray-50" />
+                <span>Not answered</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Navigation buttons */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-            disabled={current === 0}
-            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-          >
-            <ChevronLeft size={16} />
-            <span>Previous</span>
-          </button>
+        {/* Question body */}
+        <div className="flex-1 px-6 py-8">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-3">
+              Question {current + 1} of {questions.length}
+            </p>
+            <div
+              className="text-gray-800 text-base leading-relaxed mb-6"
+              dangerouslySetInnerHTML={{ __html: renderMath(q.question_text) }}
+            />
 
-          {current < questions.length - 1 ? (
+            <div className="space-y-3">
+              {(typeof q.options === "string" ? JSON.parse(q.options) : q.options).map((opt) => {
+                const selected = answers[q.id] === opt.label;
+                return (
+                  <button
+                    key={opt.label}
+                    onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: opt.label }))}
+                    className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm transition-all ${
+                      selected
+                        ? "border-red-500 bg-red-50 text-red-800"
+                        : "border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-white"
+                    }`}
+                  >
+                    <span className={`inline-flex w-7 h-7 rounded-lg mr-3 items-center justify-center text-xs font-bold ${selected ? "bg-red-500 text-white" : "bg-gray-200 text-gray-600"}`}>
+                      {opt.label}
+                    </span>
+                    <span dangerouslySetInnerHTML={{ __html: renderMath(opt.text) }} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex items-center justify-between">
             <button
-              onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm"
+              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+              disabled={current === 0}
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              <span>Next</span>
-              <ChevronRight size={16} />
+              <ChevronLeft size={16} />
+              <span>Previous</span>
             </button>
-          ) : (
-            <button
-              onClick={() => handleSubmit(false)}
-              disabled={submitting}
-              className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70"
-            >
-              {submitting && <Loader2 size={16} className="animate-spin" />}
-              <span>Submit Exam</span>
-            </button>
-          )}
+
+            {current < questions.length - 1 ? (
+              <button
+                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm"
+              >
+                <span>Next</span>
+                <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => handleSubmit(false)}
+                disabled={submitting}
+                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70"
+              >
+                {submitting && <Loader2 size={16} className="animate-spin" />}
+                <span>Submit Exam</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
