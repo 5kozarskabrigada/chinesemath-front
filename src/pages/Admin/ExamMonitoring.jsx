@@ -12,7 +12,13 @@ import {
   Volume2,
   VolumeX,
   Maximize2,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  Send,
+  XCircle,
+  UserCheck,
+  Eye,
+  RefreshCw
 } from "lucide-react";
 import io from 'socket.io-client';
 
@@ -22,6 +28,8 @@ export default function ExamMonitoring({ examId }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(false);
   const [alerts, setAlerts] = useState([]);
+  const [customMessage, setCustomMessage] = useState('');
+  const [messageHistory, setMessageHistory] = useState([]);
   const socketRef = useRef(null);
   const laptopVideoRef = useRef(null);
   const phoneVideoRef = useRef(null);
@@ -140,13 +148,40 @@ export default function ExamMonitoring({ examId }) {
 
   const requestCameraCheck = (studentId) => {
     if (socketRef.current) {
-      socketRef.current.emit('admin_request_camera_check', { studentId });
+      socketRef.current.emit('admin_request_camera_check', { targetStudentId: studentId });
+    }
+  };
+
+  const sendMessage = (message, messageType) => {
+    if (socketRef.current && selectedStudent) {
+      socketRef.current.emit('admin_message', {
+        targetStudentId: selectedStudent.id,
+        message,
+        messageType
+      });
+      
+      setMessageHistory(prev => [...prev, {
+        id: Date.now(),
+        studentId: selectedStudent.id,
+        studentName: selectedStudent.name || `Student ${selectedStudent.id.slice(0, 8)}`,
+        message,
+        messageType,
+        timestamp: new Date()
+      }]);
+    }
+  };
+
+  const sendCustomMessage = () => {
+    if (customMessage.trim()) {
+      sendMessage(customMessage, 'custom');
+      setCustomMessage('');
     }
   };
 
   const terminateExam = (studentId) => {
     if (socketRef.current && window.confirm('Are you sure you want to terminate this student\'s exam?')) {
-      socketRef.current.emit('admin_terminate_exam', { studentId });
+      socketRef.current.emit('admin_terminate_exam', { targetStudentId: studentId });
+      sendMessage('Your exam has been terminated by the administrator.', 'disqualify');
     }
   };
 
@@ -298,9 +333,10 @@ export default function ExamMonitoring({ examId }) {
                       
                       <button
                         onClick={() => terminateExam(selectedStudent.id)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition"
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition flex items-center gap-2"
                       >
-                        Terminate Exam
+                        <XCircle className="w-4 h-4" />
+                        Disqualify
                       </button>
                     </div>
                   </div>
@@ -368,6 +404,92 @@ export default function ExamMonitoring({ examId }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Admin Messaging Panel */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-purple-600" />
+                    Send Message to Student
+                  </h3>
+                  
+                  {/* Preset Messages */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <button
+                      onClick={() => sendMessage('Please stand up and do a 360° turn.', 'stand_360')}
+                      className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Stand & 360°
+                    </button>
+                    
+                    <button
+                      onClick={() => sendMessage('Please show your desk/workspace clearly.', 'show_desk')}
+                      className="px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm hover:bg-green-100 transition flex items-center justify-center gap-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Show Desk
+                    </button>
+                    
+                    <button
+                      onClick={() => sendMessage('Please verify your identity by showing your face.', 'verify_identity')}
+                      className="px-3 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm hover:bg-yellow-100 transition flex items-center justify-center gap-2"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Verify ID
+                    </button>
+                    
+                    <button
+                      onClick={() => sendMessage('Please return to your seat and focus on the exam.', 'return_seat')}
+                      className="px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 transition flex items-center justify-center gap-2"
+                    >
+                      <Monitor className="w-4 h-4" />
+                      Return to Seat
+                    </button>
+                  </div>
+                  
+                  {/* Custom Message Input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && sendCustomMessage()}
+                      placeholder="Type a custom message..."
+                      className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button
+                      onClick={sendCustomMessage}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition flex items-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      Send
+                    </button>
+                  </div>
+                </div>
+
+                {/* Message History */}
+                {messageHistory.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-gray-600" />
+                      Message History
+                    </h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {messageHistory.slice(-10).reverse().map(msg => (
+                        <div key={msg.id} className="p-3 bg-gray-50 rounded-lg text-sm">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-gray-900">{msg.studentName}</span>
+                            <span className="text-xs text-gray-500">{msg.timestamp.toLocaleTimeString()}</span>
+                          </div>
+                          <p className="text-gray-700">{msg.message}</p>
+                          <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                            {msg.messageType}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-white rounded-xl shadow-lg p-12 text-center">

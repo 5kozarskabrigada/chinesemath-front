@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
 import { renderMath } from "../../utils/math";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle } from "lucide-react";
 import CameraService from "../../services/CameraService";
 
 export default function ExamPlayer() {
@@ -18,6 +18,8 @@ export default function ExamPlayer() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [adminMessage, setAdminMessage] = useState(null);
+  const [examTerminated, setExamTerminated] = useState(false);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
 
@@ -44,6 +46,42 @@ export default function ExamPlayer() {
           try {
             await CameraService.initializeSocket(examId, user?.id || 'unknown');
             await CameraService.initializeLaptopCamera();
+
+            // Listen for admin messages
+            CameraService.socket?.on('student_admin_message', (data) => {
+              console.log('Received admin message:', data);
+              setAdminMessage(data);
+              logEvent('admin_message_received', {
+                messageType: data.messageType,
+                message: data.message
+              });
+
+              // Handle disqualification
+              if (data.messageType === 'disqualify') {
+                setExamTerminated(true);
+                CameraService.cleanup();
+                setTimeout(() => {
+                  navigate('/student/dashboard');
+                }, 3000);
+              }
+            });
+
+            // Listen for camera check requests
+            CameraService.socket?.on('student_camera_check_request', (data) => {
+              console.log('Camera check requested by admin');
+              logEvent('camera_check_requested', { timestamp: data.timestamp });
+            });
+
+            // Listen for exam termination
+            CameraService.socket?.on('student_exam_terminated', (data) => {
+              console.log('Exam terminated by admin');
+              setExamTerminated(true);
+              logEvent('exam_terminated_by_admin', { timestamp: data.timestamp });
+              CameraService.cleanup();
+              setTimeout(() => {
+                navigate('/student/dashboard');
+              }, 3000);
+            });
           } catch (error) {
             console.warn('Camera initialization failed:', error);
             // Allow exam to continue even if camera fails
@@ -199,6 +237,24 @@ export default function ExamPlayer() {
     );
   }
 
+  // Admin message notification
+  const dismissAdminMessage = () => {
+    setAdminMessage(null);
+  };
+
+  if (examTerminated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center bg-white border border-red-200 rounded-2xl p-8 shadow-sm max-w-md">
+          <AlertTriangle size={40} className="mx-auto text-red-500 mb-3" />
+          <p className="text-gray-800 font-bold text-xl mb-2">Exam Terminated</p>
+          <p className="text-gray-600">Your exam has been terminated by the administrator.</p>
+          <p className="text-sm text-gray-500 mt-4">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Top bar */}
@@ -214,6 +270,39 @@ export default function ExamPlayer() {
           </div>
         </div>
       </header>
+
+      {/* Admin Message Notification */}
+      {adminMessage && (
+        <div className={`fixed top-20 right-6 max-w-sm z-50 rounded-lg shadow-lg p-4 animate-in slide-in-from-right ${
+          adminMessage.messageType === 'disqualify' ? 'bg-red-50 border border-red-200' : 'bg-purple-50 border border-purple-200'
+        }`}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className={`w-5 h-5 mt-0.5 ${
+              adminMessage.messageType === 'disqualify' ? 'text-red-600' : 'text-purple-600'
+            }`} />
+            <div className="flex-1">
+              <p className={`font-semibold text-sm ${
+                adminMessage.messageType === 'disqualify' ? 'text-red-800' : 'text-purple-800'
+              }`}>
+                {adminMessage.messageType === 'disqualify' ? 'Exam Terminated' : 'Message from Administrator'}
+              </p>
+              <p className={`text-sm mt-1 ${
+                adminMessage.messageType === 'disqualify' ? 'text-red-700' : 'text-purple-700'
+              }`}>
+                {adminMessage.message}
+              </p>
+            </div>
+            <button
+              onClick={dismissAdminMessage}
+              className={`p-1 rounded hover:bg-opacity-80 ${
+                adminMessage.messageType === 'disqualify' ? 'hover:bg-red-100 text-red-600' : 'hover:bg-purple-100 text-purple-600'
+              }`}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Question navigator */}
       <div className="bg-white border-b border-gray-100">
