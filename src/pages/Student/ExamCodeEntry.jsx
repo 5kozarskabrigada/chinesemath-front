@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiJoinExam } from "../../api";
+import { apiJoinExam, apiCheckExamStatus } from "../../api";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 
 export default function ExamCodeEntry() {
@@ -15,6 +15,25 @@ export default function ExamCodeEntry() {
     setLoading(true);
     try {
       const exam = await apiJoinExam(code);
+      
+      // Check if student has already submitted or was terminated
+      try {
+        const status = await apiCheckExamStatus(exam.id);
+        if (status.status === 'submitted') {
+          setError("You have already submitted this exam. You cannot retake it.");
+          setLoading(false);
+          return;
+        }
+        if (status.status === 'terminated') {
+          setError("Your exam was terminated by the administrator. You cannot re-enter this exam.");
+          setLoading(false);
+          return;
+        }
+      } catch (statusError) {
+        // If status check fails, continue anyway (might not be implemented yet)
+        console.warn('Status check failed:', statusError);
+      }
+      
       // Navigate to getting ready page instead of directly to exam
       navigate(`/student/exam-setup/${exam.id}`);
     } catch (err) {

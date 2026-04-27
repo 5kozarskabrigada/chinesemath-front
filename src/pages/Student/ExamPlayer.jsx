@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../authContext";
-import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
+import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent, apiCheckExamStatus } from "../../api";
 import { renderMath } from "../../utils/math";
 import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize } from "lucide-react";
 import CameraService from "../../services/CameraService";
@@ -74,100 +74,123 @@ export default function ExamPlayer() {
     const savedState = localStorage.getItem(`exam_${examId}_state`);
     const savedStartTime = localStorage.getItem(`exam_${examId}_start_time`);
 
-    apiGetExamQuestions(examId)
-      .then(async ({ exam: e, questions: qs }) => {
-        setExam(e);
-        setQuestions(qs);
-
-        if (savedState) {
-          // Restore saved state
-          const state = JSON.parse(savedState);
-          setAnswers(state.answers || {});
-          setCurrent(state.current || 0);
-          
-          // Calculate remaining time based on saved start time
-          if (savedStartTime) {
-            const elapsed = Math.floor((Date.now() - parseInt(savedStartTime)) / 1000);
-            const totalSeconds = e.duration_minutes * 60;
-            const remaining = Math.max(0, totalSeconds - elapsed);
-            setTimeLeft(remaining);
-            examStartTimeRef.current = parseInt(savedStartTime);
-          } else {
-            setTimeLeft(e.duration_minutes * 60);
-            const startTime = Date.now();
-            localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
-            examStartTimeRef.current = startTime;
-          }
-          
-          hasLoggedStartRef.current = true;
-        } else {
-          // New exam
-          setTimeLeft(e.duration_minutes * 60);
-          const startTime = Date.now();
-          localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
-          examStartTimeRef.current = startTime;
-          
-          logEvent("exam_started", { examTitle: e.title, questionCount: qs.length });
-          hasLoggedStartRef.current = true;
-          
-          // Enter fullscreen on new exam start
-          enterFullscreen();
-          
-          // Add event listeners for security
-          document.addEventListener('contextmenu', preventContextMenu);
-          document.addEventListener('keydown', preventShortcuts);
+    // Check if student has already submitted or was terminated (final safeguard)
+    apiCheckExamStatus(examId)
+      .then((status) => {
+        if (status.status === 'submitted') {
+          setError("You have already submitted this exam. You cannot retake it.");
+          setLoading(false);
+          setTimeout(() => navigate('/student/dashboard'), 3000);
+          return;
         }
-
-        // Initialize camera monitoring
-        try {
-          await CameraService.initializeSocket(examId, user?.id || 'unknown');
-          await CameraService.initializeLaptopCamera();
-
-          // Start camera health check to send status updates to admin
-          CameraService.startCameraHealthCheck();
-
-          // Listen for admin messages
-          CameraService.socket?.on('student_admin_message', (data) => {
-            console.log('Received admin message:', data);
-            setAdminMessage(data);
-            logEvent('admin_message_received', {
-              messageType: data.messageType,
-              message: data.message
-            });
-
-            // Handle disqualification
-            if (data.messageType === 'disqualify') {
-              setExamTerminated(true);
-              CameraService.cleanup();
-              setTimeout(() => {
-                navigate('/student/dashboard');
-              }, 3000);
-            }
-          });
-
-          // Listen for camera check requests
-          CameraService.socket?.on('student_camera_check_request', (data) => {
-            console.log('Camera check requested by admin');
-            logEvent('camera_check_requested', { timestamp: data.timestamp });
-          });
-
-          // Listen for exam termination
-          CameraService.socket?.on('student_exam_terminated', (data) => {
-            console.log('Exam terminated by admin');
-            setExamTerminated(true);
-            logEvent('exam_terminated_by_admin', { timestamp: data.timestamp });
-            CameraService.cleanup();
-            setTimeout(() => {
-              navigate('/student/dashboard');
-            }, 3000);
-          });
-        } catch (error) {
-          console.warn('Camera initialization failed:', error);
-          // Allow exam to continue even if camera fails
+        if (status.status === 'terminated') {
+          setError("Your exam was terminated by the administrator. You cannot re-enter this exam.");
+          setLoading(false);
+          setTimeout(() => navigate('/student/dashboard'), 3000);
+          return;
         }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((statusError) => {
+        // If status check fails, continue anyway (might not be implemented yet)
+        console.warn('Status check failed:', statusError);
+      })
+      .finally(() => {
+        // Continue loading exam questions regardless of status check result
+        apiGetExamQuestions(examId)
+          .then(async ({ exam: e, questions: qs }) => {
+            setExam(e);
+            setQuestions(qs);
+
+            if (savedState) {
+              // Restore saved state
+              const state = JSON.parse(savedState);
+              setAnswers(state.answers || {});
+              setCurrent(state.current || 0);
+              
+              // Calculate remaining time based on saved start time
+              if (savedStartTime) {
+                const elapsed = Math.floor((Date.now() - parseInt(savedStartTime)) / 1000);
+                const totalSeconds = e.duration_minutes * 60;
+                const remaining = Math.max(0, totalSeconds - elapsed);
+                setTimeLeft(remaining);
+                examStartTimeRef.current = parseInt(savedStartTime);
+              } else {
+                setTimeLeft(e.duration_minutes * 60);
+                const startTime = Date.now();
+                localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
+                examStartTimeRef.current = startTime;
+              }
+              
+              hasLoggedStartRef.current = true;
+            } else {
+              // New exam
+              setTimeLeft(e.duration_minutes * 60);
+              const startTime = Date.now();
+              localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
+              examStartTimeRef.current = startTime;
+              
+              logEvent("exam_started", { examTitle: e.title, questionCount: qs.length });
+              hasLoggedStartRef.current = true;
+              
+              // Enter fullscreen on new exam start
+              enterFullscreen();
+              
+              // Add event listeners for security
+              document.addEventListener('contextmenu', preventContextMenu);
+              document.addEventListener('keydown', preventShortcuts);
+            }
+
+            // Initialize camera monitoring
+            try {
+              await CameraService.initializeSocket(examId, user?.id || 'unknown');
+              await CameraService.initializeLaptopCamera();
+
+              // Start camera health check to send status updates to admin
+              CameraService.startCameraHealthCheck();
+
+              // Listen for admin messages
+              CameraService.socket?.on('student_admin_message', (data) => {
+                console.log('Received admin message:', data);
+                setAdminMessage(data);
+                logEvent('admin_message_received', {
+                  messageType: data.messageType,
+                  message: data.message
+                });
+
+                // Handle disqualification
+                if (data.messageType === 'disqualify') {
+                  setExamTerminated(true);
+                  CameraService.cleanup();
+                  setTimeout(() => {
+                    navigate('/student/dashboard');
+                  }, 3000);
+                }
+              });
+
+              // Listen for camera check requests
+              CameraService.socket?.on('student_camera_check_request', (data) => {
+                console.log('Camera check requested by admin');
+                logEvent('camera_check_requested', { timestamp: data.timestamp });
+              });
+
+              // Listen for exam termination
+              CameraService.socket?.on('student_exam_terminated', (data) => {
+                console.log('Exam terminated by admin');
+                setExamTerminated(true);
+                logEvent('exam_terminated_by_admin', { timestamp: data.timestamp });
+                CameraService.cleanup();
+                setTimeout(() => {
+                  navigate('/student/dashboard');
+                }, 3000);
+              });
+            } catch (error) {
+              console.warn('Camera initialization failed:', error);
+              // Allow exam to continue even if camera fails
+            }
+          })
+          .catch((err) => setError(err.message))
+          .finally(() => setLoading(false));
+      });
 
     return () => {
       document.removeEventListener('contextmenu', preventContextMenu);
