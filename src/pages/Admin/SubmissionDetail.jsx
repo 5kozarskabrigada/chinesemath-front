@@ -4,9 +4,17 @@ import AdminLayout from "../../components/AdminLayout";
 import { apiGetSubmissionDetail } from "../../api";
 import {
   ArrowLeft, CheckCircle, XCircle, Download, Loader2,
-  User, Clock, FileText, Award, Printer
+  User, Clock, FileText, Award
 } from "lucide-react";
 import { renderMath } from "../../utils/math";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+// Strip HTML for PDF text
+function stripHtml(html) {
+  if (!html) return "";
+  return html.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").trim();
+}
 
 function parseOptions(raw) {
   if (!raw) return [];
@@ -42,9 +50,194 @@ export default function AdminSubmissionDetail() {
       .finally(() => setLoading(false));
   }, [submissionId]);
 
-  const handleDownloadPdf = () => {
-    if (!data) return;
-    window.print();
+  const handleDownloadPdf = async () => {
+    if (!data || downloadingPdf) return;
+    setDownloadingPdf(true);
+
+    try {
+      const { submission: sub, answers } = data;
+      const studentName = `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || sub.username || "Unknown";
+      const examTitle = sub.exam_title || "Exam";
+      const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 16;
+      const contentWidth = pageWidth - margin * 2;
+      const dark = [17, 24, 39];
+      const muted = [107, 114, 128];
+      const border = [229, 231, 235];
+      const panel = [249, 250, 251];
+      const green = [22, 163, 74];
+      const red = [220, 38, 38];
+
+      const completedDate = sub.submitted_at
+        ? new Date(sub.submitted_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+        : "N/A";
+
+      // ── Cover ─────────────────────────────────────────────────────────
+      pdf.setFillColor(...panel);
+      pdf.setDrawColor(...border);
+      pdf.roundedRect(margin, margin, contentWidth, 18, 3, 3, "FD");
+      pdf.setTextColor(...dark);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11.5);
+      pdf.text("ChineseMath", margin + 6, margin + 8.2);
+      pdf.setTextColor(...muted);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8.2);
+      pdf.text("Official Submission Report", margin + 6, margin + 13.3);
+
+      const coverY = margin + 22;
+      pdf.setFillColor(...dark);
+      pdf.roundedRect(margin, coverY, contentWidth, 54, 4, 4, "F");
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(19);
+      pdf.text("Submission Results", margin + 8, coverY + 15);
+
+      pdf.setTextColor(156, 163, 175);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.text(examTitle, margin + 8, coverY + 23);
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(26);
+      pdf.text(`${sub.score}%`, pageWidth - margin - 8, coverY + 18, { align: "right" });
+
+      pdf.setTextColor(156, 163, 175);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      pdf.text("SCORE", pageWidth - margin - 8, coverY + 25, { align: "right" });
+
+      pdf.setDrawColor(55, 65, 81);
+      pdf.line(margin + 8, coverY + 35, pageWidth - margin - 8, coverY + 35);
+
+      pdf.setTextColor(156, 163, 175);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      pdf.text("STUDENT", margin + 8, coverY + 43);
+      pdf.text("DATE", pageWidth - margin - 8, coverY + 43, { align: "right" });
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(studentName, margin + 8, coverY + 49);
+      pdf.text(completedDate, pageWidth - margin - 8, coverY + 49, { align: "right" });
+
+      // ── Summary Cards ─────────────────────────────────────────────────
+      const cardsY = margin + 86;
+      const gap = 4;
+      const cardW = (contentWidth - gap * 3) / 4;
+      const summaryCards = [
+        { title: "Score", value: `${sub.score}%`, sub: sub.score >= 60 ? "Passing" : "Below passing", accent: sub.score >= 60 ? green : red, bg: sub.score >= 60 ? [220, 252, 231] : [254, 226, 226] },
+        { title: "Correct", value: `${sub.total_correct}/${sub.total_questions}`, sub: "answers", accent: dark, bg: panel },
+        { title: "Time Spent", value: formatDuration(sub.time_spent), sub: "duration", accent: dark, bg: panel },
+        { title: "Status", value: sub.status === "submitted" ? "Submitted" : (sub.status || "—"), sub: "submission state", accent: green, bg: [220, 252, 231] },
+      ];
+
+      summaryCards.forEach((c, i) => {
+        const x = margin + (cardW + gap) * i;
+        pdf.setFillColor(...c.bg);
+        pdf.setDrawColor(...border);
+        pdf.roundedRect(x, cardsY, cardW, 29, 3, 3, "FD");
+        pdf.setTextColor(...muted);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        pdf.text(c.title.toUpperCase(), x + 5, cardsY + 8);
+        pdf.setTextColor(...c.accent);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(14);
+        pdf.text(String(c.value), x + 5, cardsY + 18);
+        pdf.setTextColor(...muted);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        pdf.text(c.sub, x + 5, cardsY + 25);
+      });
+
+      // ── Questions Table ─────────────────────────────────────────────────
+      const addPageHeader = (title, subtitle) => {
+        pdf.addPage();
+        pdf.setFillColor(...dark);
+        pdf.rect(0, 0, pageWidth, 30, "F");
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(18);
+        pdf.text(title, margin, 13);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(10);
+        pdf.text(subtitle, margin, 21);
+        return 40;
+      };
+
+      let y = addPageHeader("Question Breakdown", `${sub.total_correct} correct / ${(sub.total_questions || 0) - (sub.total_correct || 0)} wrong`);
+
+      const tableBody = answers.map((a) => {
+        const opts = parseOptions(a.options);
+        const userOpt = opts.find(o => o.label === a.user_answer);
+        const correctOpt = opts.find(o => o.label === a.correct_answer);
+        const result = a.is_correct === true ? "Correct" : (a.is_correct === false ? "Wrong" : "Recorded");
+        return [
+          String(a.question_number || "-"),
+          stripHtml(a.question_text).replace(/\s+/g, " ").trim().substring(0, 100),
+          a.user_answer ? `${a.user_answer}${userOpt ? ". " + stripHtml(userOpt.text).replace(/\s+/g, " ").trim().substring(0, 30) : ""}` : "Skipped",
+          `${a.correct_answer}${correctOpt ? ". " + stripHtml(correctOpt.text).replace(/\s+/g, " ").trim().substring(0, 30) : ""}`,
+          result,
+        ];
+      });
+
+      autoTable(pdf, {
+        startY: y,
+        head: [["#", "Question", "Student Answer", "Correct Answer", "Result"]],
+        body: tableBody,
+        theme: "grid",
+        margin: { left: margin, right: margin },
+        headStyles: { fillColor: dark, textColor: 255, fontSize: 8.5, halign: "left" },
+        styles: { fontSize: 8, cellPadding: 2.6, lineColor: border, lineWidth: 0.1, overflow: "linebreak", valign: "middle" },
+        bodyStyles: { textColor: [31, 41, 55] },
+        rowPageBreak: "avoid",
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 82 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 24, halign: "center", fontStyle: "bold" },
+        },
+        didParseCell: (hookData) => {
+          if (hookData.section !== "body" || hookData.column.index !== 4) return;
+          const result = String(hookData.cell.raw);
+          if (result === "Correct") hookData.cell.styles.textColor = green;
+          else if (result === "Wrong") hookData.cell.styles.textColor = red;
+          else if (result === "Recorded") hookData.cell.styles.textColor = muted;
+        },
+        didDrawPage: () => {
+          pdf.setTextColor(...muted);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8);
+          pdf.text("ChineseMath Submission Report", margin, pageHeight - 6);
+        },
+      });
+
+      // ── Page Numbers ──────────────────────────────────────────────────
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setTextColor(...muted);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 6, { align: "right" });
+      }
+
+      pdf.save(filename);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   if (loading) {
@@ -66,18 +259,9 @@ export default function AdminSubmissionDetail() {
 
   return (
     <AdminLayout>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body * { visibility: hidden; }
-          #submission-content, #submission-content * { visibility: visible; }
-          #submission-content { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
-          .page-break { page-break-before: always; }
-        }
-      `}</style>
-      <div id="submission-content" className="p-8 max-w-5xl">
+      <div className="p-8 max-w-5xl">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-6 no-print">
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => navigate("/admin/submissions")}
             className="flex items-center gap-2 text-gray-500 hover:text-red-600 text-sm transition"
@@ -87,10 +271,11 @@ export default function AdminSubmissionDetail() {
           </button>
           <button
             onClick={handleDownloadPdf}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition shadow-sm"
+            disabled={downloadingPdf}
+            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
           >
-            <Printer size={16} />
-            Print / Save as PDF
+            {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            {downloadingPdf ? "Generating..." : "Download PDF"}
           </button>
         </div>
 
