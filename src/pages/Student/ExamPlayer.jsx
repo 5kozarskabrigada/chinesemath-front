@@ -33,7 +33,7 @@ export default function ExamPlayer() {
   }, [examId]);
 
   useEffect(() => {
-    // Enter fullscreen mode
+    // Enter fullscreen mode and prevent exit
     const enterFullscreen = async () => {
       try {
         if (document.documentElement.requestFullscreen) {
@@ -47,6 +47,28 @@ export default function ExamPlayer() {
         console.warn('Fullscreen request failed:', error);
       }
     };
+
+    // Prevent right-click context menu
+    const preventContextMenu = (e) => {
+      e.preventDefault();
+      logEvent("context_menu_blocked", { timestamp: new Date().toISOString() });
+    };
+
+    // Prevent keyboard shortcuts
+    const preventShortcuts = (e) => {
+      if (
+        (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'x')) ||
+        (e.ctrlKey && e.shiftKey && e.key === 'i') ||
+        (e.ctrlKey && e.key === 'u') ||
+        (e.key === 'F12')
+      ) {
+        e.preventDefault();
+        logEvent("keyboard_shortcut_blocked", { key: e.key, timestamp: new Date().toISOString() });
+      }
+    };
+
+    document.addEventListener('contextmenu', preventContextMenu);
+    document.addEventListener('keydown', preventShortcuts);
 
     // Load saved state from localStorage
     const savedState = localStorage.getItem(`exam_${examId}_state`);
@@ -90,6 +112,10 @@ export default function ExamPlayer() {
           
           // Enter fullscreen on new exam start
           enterFullscreen();
+          
+          // Add event listeners for security
+          document.addEventListener('contextmenu', preventContextMenu);
+          document.addEventListener('keydown', preventShortcuts);
         }
 
         // Initialize camera monitoring
@@ -142,21 +168,99 @@ export default function ExamPlayer() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    return () => {
+      document.removeEventListener('contextmenu', preventContextMenu);
+      document.removeEventListener('keydown', preventShortcuts);
+    };
   }, [examId, logEvent, user?.id, navigate]);
 
-  // Fullscreen detection
+  // Fullscreen detection and prevention
   useEffect(() => {
     const handleFullscreenChange = () => {
-      if (document.fullscreenElement) {
-        logEvent("fullscreen_enter");
+      if (!document.fullscreenElement) {
+        logEvent("fullscreen_exit_violation", { timestamp: new Date().toISOString() });
+        // Force fullscreen back
+        const enterFullscreen = async () => {
+          try {
+            if (document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+              await document.documentElement.webkitRequestFullscreen();
+            } else if (document.documentElement.msRequestFullscreen) {
+              await document.documentElement.msRequestFullscreen();
+            }
+          } catch (error) {
+            console.warn('Fullscreen re-entry failed:', error);
+          }
+        };
+        enterFullscreen();
       } else {
-        logEvent("fullscreen_exit", { timestamp: new Date().toISOString() });
+        logEvent("fullscreen_enter");
       }
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, [logEvent]);
+
+  // ESC key detection as violation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        logEvent("esc_key_press_violation", { timestamp: new Date().toISOString() });
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [logEvent]);
+
+  // Multiple monitor detection
+  useEffect(() => {
+    const detectMultipleMonitors = () => {
+      if (window.screen && window.screen.width && window.screen.height) {
+        const screenArea = window.screen.width * window.screen.height;
+        const windowArea = window.innerWidth * window.innerHeight;
+        
+        // If screen area is significantly larger than window area, likely multiple monitors
+        if (screenArea > windowArea * 2) {
+          logEvent("multiple_monitors_detected", {
+            screenWidth: window.screen.width,
+            screenHeight: window.screen.height,
+            windowWidth: window.innerWidth,
+            windowHeight: window.innerHeight,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+    };
+
+    detectMultipleMonitors();
+    window.addEventListener('resize', detectMultipleMonitors);
+    return () => window.removeEventListener('resize', detectMultipleMonitors);
+  }, [logEvent]);
+
+  // Detect URL change (switching to another exam)
+  useEffect(() => {
+    const currentUrl = window.location.href;
+    
+    const checkUrlChange = () => {
+      const newUrl = window.location.href;
+      if (newUrl !== currentUrl && !newUrl.includes(`/student/exam/${examId}`)) {
+        logEvent("exam_switch_violation", {
+          fromUrl: currentUrl,
+          toUrl: newUrl,
+          timestamp: new Date().toISOString()
+        });
+      }
+    };
+
+    // Check periodically
+    const urlCheckInterval = setInterval(checkUrlChange, 1000);
+    return () => clearInterval(urlCheckInterval);
+  }, [examId, logEvent]);
 
   // Window blur/focus detection
   useEffect(() => {

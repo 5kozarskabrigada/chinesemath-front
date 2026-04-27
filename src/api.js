@@ -64,6 +64,10 @@ export async function apiGetMyExams() {
   return request("/api/exams/my");
 }
 
+export async function apiCheckExamStatus(examId) {
+  return request(`/api/exams/${examId}/status`);
+}
+
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
 export async function apiGetStats() {

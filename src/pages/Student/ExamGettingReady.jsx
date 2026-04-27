@@ -13,10 +13,11 @@ import {
   Shield,
   Clock,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  XCircle
 } from "lucide-react";
 import CameraService from "../../services/CameraService";
-import { apiGetExam } from "../../api";
+import { apiGetExam, apiCheckExamStatus } from "../../api";
 
 export default function ExamGettingReady() {
   const { examId } = useParams();
@@ -45,12 +46,32 @@ export default function ExamGettingReady() {
   // Phone camera URL for QR code
   const phoneURL = CameraService.generatePhoneURL(examId, user?.id || 'unknown');
 
-  // Load exam data
+  // Load exam data and check status
   useEffect(() => {
     const loadExamData = async () => {
       try {
         const examData = await apiGetExam(examId);
         setExam(examData);
+
+        // Check if student has already submitted or was terminated
+        try {
+          const status = await apiCheckExamStatus(examId);
+          if (status.status === 'submitted') {
+            setError("You have already submitted this exam. You cannot retake it.");
+            setLoading(false);
+            setTimeout(() => navigate('/student/dashboard'), 3000);
+            return;
+          }
+          if (status.status === 'terminated') {
+            setError("Your exam was terminated by the administrator. You cannot re-enter this exam.");
+            setLoading(false);
+            setTimeout(() => navigate('/student/dashboard'), 3000);
+            return;
+          }
+        } catch (statusError) {
+          // If status check fails, continue anyway (might not be implemented yet)
+          console.warn('Status check failed:', statusError);
+        }
       } catch (error) {
         setError("Failed to load exam data");
       } finally {
@@ -59,7 +80,7 @@ export default function ExamGettingReady() {
     };
 
     loadExamData();
-  }, [examId]);
+  }, [examId, navigate]);
 
   // Initialize camera service
   useEffect(() => {
