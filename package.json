@@ -20,6 +20,8 @@
     "autoprefixer": "^10.4.20",
     "html-react-parser": "^6.0.1",
     "jquery": "^3.7.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "katex": "^0.16.11",
     "lucide-react": "^0.394.0",
     "mathquill": "^0.10.1",
