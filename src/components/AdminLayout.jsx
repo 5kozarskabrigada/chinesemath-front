@@ -13,6 +13,7 @@ import {
   Activity,
   Trash2,
   Monitor,
+  Video,
 } from "lucide-react";
 
 // Navigation items for admin sidebar
@@ -23,8 +24,9 @@ const navItems = [
   { to: "/admin/submissions", label: "Submissions", icon: ClipboardList },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/classrooms", label: "Classrooms", icon: School },
-  { to: "/admin/logs", label: "Exam Logs", icon: Activity },
-  { to: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2 }, // Added
+  { to: "/admin/exam-sessions", label: "Exam Sessions", icon: Video },
+  { to: "/admin/logs", label: "Activity Logs", icon: Activity },
+  { to: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2 },
 ];
 
 export default function AdminLayout({ children }) {

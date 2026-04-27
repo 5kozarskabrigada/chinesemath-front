@@ -175,6 +175,16 @@ export async function apiGetExamLogStats(filters = {}) {
   return request(`/api/admin/logs/stats${query ? `?${query}` : ""}`);
 }
 
+// ─── Admin: Exam Sessions ───────────────────────────────────────────────────
+
+export async function apiGetExamSessions(examId) {
+  return request(`/api/admin/exams/${examId}/sessions`);
+}
+
+export async function apiGetStudentSessionDetail(examId, studentId) {
+  return request(`/api/admin/exams/${examId}/sessions/${studentId}`);
+}
+
 // ─── Admin: Monitoring Events ────────────────────────────────────────────────
 
 export async function apiGetMonitoringEvents(examId) {

@@ -14,6 +14,7 @@ import ClassroomDetail from "./pages/Admin/ClassroomDetail";
 import ExamLogs from "./pages/Admin/ExamLogs";
 import RecycleBin from "./pages/Admin/RecycleBin";
 import ExamMonitoring from "./pages/Admin/ExamMonitoring";
+import ExamSessions from "./pages/Admin/ExamSessions";
 
 import StudentDashboard from "./pages/Student/Dashboard";
 import ExamCodeEntry from "./pages/Student/ExamCodeEntry";
@@ -102,6 +103,18 @@ function App() {
           <Route
             path="/admin/exams/:examId/monitor"
             element={<PrivateRoute role="admin"><ExamMonitoringKeyed /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/exam-sessions"
+            element={<PrivateRoute role="admin"><ExamSessions /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/exam-sessions/:examId"
+            element={<PrivateRoute role="admin"><ExamSessions /></PrivateRoute>}
+          />
+          <Route
+            path="/admin/exam-sessions/:examId/:studentId"
+            element={<PrivateRoute role="admin"><ExamSessions /></PrivateRoute>}
           />
 
           {/* Student */}
