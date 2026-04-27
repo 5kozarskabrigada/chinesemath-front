@@ -45,16 +45,103 @@ export default function AdminSubmissionDetail() {
   }, [submissionId]);
 
   const handleDownloadPdf = async () => {
-    if (!data || downloadingPdf || !contentRef.current) return;
+    if (!data || downloadingPdf) return;
     setDownloadingPdf(true);
 
     try {
-      const { submission: sub } = data;
+      const { submission: sub, answers } = data;
       const studentName = `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || sub.username || "Unknown";
       const examTitle = sub.exam_title || "Exam";
       const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
 
-      const element = contentRef.current;
+      const completedDate = sub.submitted_at
+        ? new Date(sub.submitted_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+        : "N/A";
+
+      // Create PDF-specific HTML template
+      const pdfTemplate = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: white;">
+          <!-- Cover Page -->
+          <div style="margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #111;">
+            <h1 style="margin: 0 0 10px 0; font-size: 28px; color: #111;">${examTitle}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 16px; color: #666;">Student: ${studentName} (@${sub.username})</p>
+            <p style="margin: 5px 0 0 0; font-size: 16px; color: #666;">Submitted: ${completedDate}</p>
+          </div>
+
+          <!-- Summary Cards -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
+            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
+              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Score</div>
+              <div style="font-size: 32px; font-weight: bold; color: ${sub.score >= 60 ? '#16a34a' : '#dc2626'};">${sub.score}%</div>
+            </div>
+            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
+              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Correct</div>
+              <div style="font-size: 32px; font-weight: bold; color: #111;">${sub.total_correct}/${sub.total_questions}</div>
+            </div>
+            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
+              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Time Spent</div>
+              <div style="font-size: 32px; font-weight: bold; color: #111;">${formatDuration(sub.time_spent)}</div>
+            </div>
+            <div style="padding: 20px; background: #dcfce7; border: 2px solid #86efac; border-radius: 8px;">
+              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Status</div>
+              <div style="font-size: 32px; font-weight: bold; color: #111;">${sub.status === "submitted" ? "Submitted" : (sub.status || "—")}</div>
+            </div>
+          </div>
+
+          <!-- Question Breakdown -->
+          <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #111; page-break-after: avoid;">Question Breakdown</h2>
+
+          ${answers.map((a) => {
+            const opts = parseOptions(a.options);
+            return `
+              <div style="margin-bottom: 25px; padding: 20px; border: 2px solid ${a.is_correct ? '#86efac' : '#fca5a5'}; border-radius: 8px; background: ${a.is_correct ? '#f0fdf4' : '#fef2f2'}; page-break-inside: avoid;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                  <span style="font-size: 14px; color: #6b7280; font-weight: 700; padding: 4px 12px; background: #e5e7eb; border-radius: 4px;">Q${a.question_number}</span>
+                  <span style="font-size: 13px; padding: 4px 12px; border-radius: 4px; font-weight: 700; background: ${a.is_correct ? '#dcfce7' : '#fecaca'}; color: ${a.is_correct ? '#16a34a' : '#dc2626'};">
+                    ${a.is_correct ? '✓ CORRECT' : '✗ WRONG'}
+                  </span>
+                </div>
+                <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.6;">${renderMath(a.question_text)}</div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                  ${opts.map((opt) => {
+                    const isUserAnswer = a.user_answer === opt.label;
+                    const isCorrect = a.correct_answer === opt.label;
+                    let bg = '#f9fafb';
+                    let border = '#e5e7eb';
+                    let color = '#374151';
+                    if (isCorrect) { bg = '#dcfce7'; border = '#86efac'; color = '#166534'; }
+                    else if (isUserAnswer && !isCorrect) { bg = '#fecaca'; border = '#fca5a5'; color = '#991b1b'; }
+                    return `
+                      <div style="padding: 12px 16px; border: 2px solid ${border}; border-radius: 6px; background: ${bg}; color: ${color}; font-size: 14px;">
+                        <span style="font-weight: 700;">${opt.label}.</span> ${renderMath(opt.text)}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+                ${!a.is_correct ? `
+                  <div style="margin-top: 12px; font-size: 13px; color: #6b7280; padding: 10px; background: #f3f4f6; border-radius: 4px;">
+                    Your answer: <strong style="color: #dc2626;">${a.user_answer || "Skipped"}</strong> ·
+                    Correct: <strong style="color: #16a34a;">${a.correct_answer}</strong>
+                  </div>
+                ` : ''}
+                ${a.explanation ? `
+                  <div style="margin-top: 12px; padding: 12px; background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 6px; font-size: 13px; color: #1e40af;">
+                    <strong>Explanation:</strong> ${a.explanation}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      // Create temporary element
+      const tempDiv = document.createElement("div");
+      tempDiv.style.cssText = "position: absolute; left: -9999px; top: 0; width: 210mm; padding: 20px; background: white;";
+      tempDiv.innerHTML = pdfTemplate;
+      document.body.appendChild(tempDiv);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const opt = {
         margin: 10,
@@ -65,7 +152,9 @@ export default function AdminSubmissionDetail() {
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      await html2pdf().set(opt).from(element).save();
+      await html2pdf().set(opt).from(tempDiv).save();
+
+      document.body.removeChild(tempDiv);
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Please try again.");
