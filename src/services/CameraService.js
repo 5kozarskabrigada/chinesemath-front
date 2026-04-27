@@ -260,15 +260,15 @@ class CameraService {
     video.play();
 
     const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
 
     this.laptopSnapshotInterval = setInterval(() => {
       if (!this.socket || !this.isConnected || !this.laptopStream) return;
       try {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        ctx.drawImage(video, 0, 0, 320, 240);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
         this.socket.emit('camera_stream', {
           cameraType: 'laptop',
           data: dataUrl,
@@ -277,7 +277,7 @@ class CameraService {
       } catch (e) {
         console.warn('Laptop snapshot error:', e);
       }
-    }, 1000);
+    }, 67);
 
     this.laptopVideoEl = video;
     return this.laptopSnapshotInterval;
@@ -293,15 +293,15 @@ class CameraService {
     video.play();
 
     const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
 
     this.phoneSnapshotInterval = setInterval(() => {
       if (!this.socket || !this.isConnected || !this.phoneStream) return;
       try {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        ctx.drawImage(video, 0, 0, 320, 240);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
         this.socket.emit('phone_camera_stream', {
           data: dataUrl,
           timestamp: Date.now()
@@ -309,13 +309,13 @@ class CameraService {
       } catch (e) {
         console.warn('Phone snapshot error:', e);
       }
-    }, 1000);
+    }, 67);
 
     this.phoneVideoEl = video;
     return this.phoneSnapshotInterval;
   }
 
-  // Send current camera status to admin
+  // ... rest of the code remains the same ...
   sendCameraStatus() {
     if (!this.socket) return;
 
