@@ -157,52 +157,75 @@ function SessionList({ examId, onSelect, onBack }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map(s => (
-            <div
-              key={s.submission_id}
-              onClick={() => onSelect(s.user_id)}
-              className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:shadow-lg hover:border-red-300 transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-red-600" />
+          {sessions.map(s => {
+            const statusConfig = {
+              disqualified: { label: "Disqualified", cls: "bg-red-600 text-white" },
+              submitted:    { label: "Submitted",    cls: "bg-green-100 text-green-700" },
+              in_progress:  { label: "In Progress",  cls: "bg-yellow-100 text-yellow-700" },
+              joined:       { label: "Joined Only",  cls: "bg-blue-100 text-blue-700" },
+            };
+            const st = statusConfig[s.session_status] || statusConfig.joined;
+
+            return (
+              <div
+                key={s.user_id}
+                onClick={() => onSelect(s.user_id)}
+                className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:shadow-lg hover:border-red-300 transition"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      s.session_status === 'disqualified' ? 'bg-red-100' : 'bg-red-100'
+                    }`}>
+                      {s.session_status === 'disqualified' 
+                        ? <UserX className="w-5 h-5 text-red-600" />
+                        : <User className="w-5 h-5 text-red-600" />
+                      }
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900">{s.first_name} {s.last_name}</h3>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded ${st.cls}`}>{st.label}</span>
+                      </div>
+                      <p className="text-sm text-gray-500">{s.username}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{s.first_name} {s.last_name}</h3>
-                    <p className="text-sm text-gray-500">{s.username}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6 text-sm">
-                  {parseInt(s.disqualified) > 0 && (
-                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded">Disqualified</span>
-                  )}
-                  {parseInt(s.suspicious_count) > 0 && (
-                    <span className="flex items-center gap-1 text-red-600">
-                      <AlertTriangle className="w-4 h-4" />
-                      {s.suspicious_count} suspicious
+                  <div className="flex items-center gap-5 text-sm flex-wrap">
+                    {parseInt(s.suspicious_count) > 0 && (
+                      <span className="flex items-center gap-1 text-red-600 font-medium">
+                        <AlertTriangle className="w-4 h-4" />
+                        {s.suspicious_count} suspicious
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Camera className="w-4 h-4" />
+                      {s.snapshot_count}
                     </span>
-                  )}
-                  <span className="flex items-center gap-1 text-gray-600">
-                    <Camera className="w-4 h-4" />
-                    {s.snapshot_count} snapshots
-                  </span>
-                  <span className="flex items-center gap-1 text-gray-600">
-                    <MessageSquare className="w-4 h-4" />
-                    {s.message_count} messages
-                  </span>
-                  <div className="text-right">
-                    <div className="font-semibold text-gray-900">
-                      {s.status === 'submitted' ? `${s.score}%` : 'In Progress'}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {s.total_correct}/{s.total_questions} correct
-                    </div>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <MessageSquare className="w-4 h-4" />
+                      {s.message_count}
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <Activity className="w-4 h-4" />
+                      {s.total_events} events
+                    </span>
+                    {s.submission_status === 'submitted' ? (
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-900">{s.score != null ? `${s.score}%` : '—'}</div>
+                        <div className="text-xs text-gray-400">
+                          {s.total_correct}/{s.total_questions} correct
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-right text-gray-400 text-xs">
+                        No submission
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
