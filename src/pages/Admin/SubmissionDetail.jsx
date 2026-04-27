@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { apiGetSubmissionDetail } from "../../api";
@@ -7,7 +7,22 @@ import {
   User, Clock, FileText, Award
 } from "lucide-react";
 import { renderMath } from "../../utils/math";
-import html2pdf from "html2pdf.js";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+// Strip HTML for PDF text (like IELTS repo)
+function stripHtml(html) {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .trim();
+}
 
 function parseOptions(raw) {
   if (!raw) return [];
@@ -35,7 +50,6 @@ export default function AdminSubmissionDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const contentRef = useRef(null);
 
   useEffect(() => {
     apiGetSubmissionDetail(submissionId)
@@ -54,107 +68,157 @@ export default function AdminSubmissionDetail() {
       const examTitle = sub.exam_title || "Exam";
       const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
 
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 16;
+      const dark = [17, 24, 39];
+      const muted = [107, 114, 128];
+      const border = [229, 231, 235];
+      const panel = [249, 250, 251];
+      const green = [22, 163, 74];
+      const red = [220, 38, 38];
+
       const completedDate = sub.submitted_at
         ? new Date(sub.submitted_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
         : "N/A";
 
-      // Create PDF-specific HTML template
-      const pdfTemplate = `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background: white;">
-          <!-- Cover Page -->
-          <div style="margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #111;">
-            <h1 style="margin: 0 0 10px 0; font-size: 28px; color: #111;">${examTitle}</h1>
-            <p style="margin: 5px 0 0 0; font-size: 16px; color: #666;">Student: ${studentName} (@${sub.username})</p>
-            <p style="margin: 5px 0 0 0; font-size: 16px; color: #666;">Submitted: ${completedDate}</p>
-          </div>
+      // Cover
+      pdf.setFillColor(...panel);
+      pdf.setDrawColor(...border);
+      pdf.roundedRect(margin, margin, pageWidth - margin * 2, 18, 3, 3, "FD");
+      pdf.setTextColor(...dark);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11.5);
+      pdf.text("ChineseMath", margin + 6, margin + 8.2);
+      pdf.setTextColor(...muted);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8.2);
+      pdf.text("Official Submission Report", margin + 6, margin + 13.3);
 
-          <!-- Summary Cards -->
-          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
-            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
-              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Score</div>
-              <div style="font-size: 32px; font-weight: bold; color: ${sub.score >= 60 ? '#16a34a' : '#dc2626'};">${sub.score}%</div>
-            </div>
-            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
-              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Correct</div>
-              <div style="font-size: 32px; font-weight: bold; color: #111;">${sub.total_correct}/${sub.total_questions}</div>
-            </div>
-            <div style="padding: 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px;">
-              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Time Spent</div>
-              <div style="font-size: 32px; font-weight: bold; color: #111;">${formatDuration(sub.time_spent)}</div>
-            </div>
-            <div style="padding: 20px; background: #dcfce7; border: 2px solid #86efac; border-radius: 8px;">
-              <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px;">Status</div>
-              <div style="font-size: 32px; font-weight: bold; color: #111;">${sub.status === "submitted" ? "Submitted" : (sub.status || "—")}</div>
-            </div>
-          </div>
+      const coverY = margin + 22;
+      pdf.setFillColor(...dark);
+      pdf.roundedRect(margin, coverY, pageWidth - margin * 2, 54, 4, 4, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(19);
+      pdf.text("Submission Results", margin + 8, coverY + 15);
+      pdf.setTextColor(156, 163, 175);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.text(examTitle, margin + 8, coverY + 23);
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(26);
+      pdf.text(`${sub.score}%`, pageWidth - margin - 8, coverY + 18, { align: "right" });
+      pdf.setDrawColor(55, 65, 81);
+      pdf.line(margin + 8, coverY + 35, pageWidth - margin - 8, coverY + 35);
+      pdf.setTextColor(156, 163, 175);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      pdf.text("STUDENT", margin + 8, coverY + 43);
+      pdf.text("DATE", pageWidth - margin - 8, coverY + 43, { align: "right" });
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(studentName, margin + 8, coverY + 49);
+      pdf.text(completedDate, pageWidth - margin - 8, coverY + 49, { align: "right" });
 
-          <!-- Question Breakdown -->
-          <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #111; page-break-after: avoid;">Question Breakdown</h2>
+      // Summary cards
+      const cardsY = margin + 86;
+      const gap = 4;
+      const cardW = (pageWidth - margin * 2 - gap * 3) / 4;
+      const summaryCards = [
+        { title: "Score", value: `${sub.score}%`, accent: sub.score >= 60 ? green : red, bg: sub.score >= 60 ? [220, 252, 231] : [254, 226, 226] },
+        { title: "Correct", value: `${sub.total_correct}/${sub.total_questions}`, accent: dark, bg: panel },
+        { title: "Time Spent", value: formatDuration(sub.time_spent), accent: dark, bg: panel },
+        { title: "Status", value: sub.status === "submitted" ? "Submitted" : (sub.status || "—"), accent: green, bg: [220, 252, 231] },
+      ];
 
-          ${answers.map((a) => {
-            const opts = parseOptions(a.options);
-            return `
-              <div style="margin-bottom: 25px; padding: 20px; border: 2px solid ${a.is_correct ? '#86efac' : '#fca5a5'}; border-radius: 8px; background: ${a.is_correct ? '#f0fdf4' : '#fef2f2'}; page-break-inside: avoid;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                  <span style="font-size: 14px; color: #6b7280; font-weight: 700; padding: 4px 12px; background: #e5e7eb; border-radius: 4px;">Q${a.question_number}</span>
-                  <span style="font-size: 13px; padding: 4px 12px; border-radius: 4px; font-weight: 700; background: ${a.is_correct ? '#dcfce7' : '#fecaca'}; color: ${a.is_correct ? '#16a34a' : '#dc2626'};">
-                    ${a.is_correct ? '✓ CORRECT' : '✗ WRONG'}
-                  </span>
-                </div>
-                <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.6;">${renderMath(a.question_text)}</div>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                  ${opts.map((opt) => {
-                    const isUserAnswer = a.user_answer === opt.label;
-                    const isCorrect = a.correct_answer === opt.label;
-                    let bg = '#f9fafb';
-                    let border = '#e5e7eb';
-                    let color = '#374151';
-                    if (isCorrect) { bg = '#dcfce7'; border = '#86efac'; color = '#166534'; }
-                    else if (isUserAnswer && !isCorrect) { bg = '#fecaca'; border = '#fca5a5'; color = '#991b1b'; }
-                    return `
-                      <div style="padding: 12px 16px; border: 2px solid ${border}; border-radius: 6px; background: ${bg}; color: ${color}; font-size: 14px;">
-                        <span style="font-weight: 700;">${opt.label}.</span> ${renderMath(opt.text)}
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-                ${!a.is_correct ? `
-                  <div style="margin-top: 12px; font-size: 13px; color: #6b7280; padding: 10px; background: #f3f4f6; border-radius: 4px;">
-                    Your answer: <strong style="color: #dc2626;">${a.user_answer || "Skipped"}</strong> ·
-                    Correct: <strong style="color: #16a34a;">${a.correct_answer}</strong>
-                  </div>
-                ` : ''}
-                ${a.explanation ? `
-                  <div style="margin-top: 12px; padding: 12px; background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 6px; font-size: 13px; color: #1e40af;">
-                    <strong>Explanation:</strong> ${a.explanation}
-                  </div>
-                ` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
+      summaryCards.forEach((c, i) => {
+        const x = margin + (cardW + gap) * i;
+        pdf.setFillColor(...c.bg);
+        pdf.setDrawColor(...border);
+        pdf.roundedRect(x, cardsY, cardW, 29, 3, 3, "FD");
+        pdf.setTextColor(...muted);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        pdf.text(c.title.toUpperCase(), x + 5, cardsY + 8);
+        pdf.setTextColor(...c.accent);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(14);
+        pdf.text(String(c.value), x + 5, cardsY + 18);
+      });
 
-      // Create temporary element
-      const tempDiv = document.createElement("div");
-      tempDiv.style.cssText = "position: absolute; left: -9999px; top: 0; width: 210mm; padding: 20px; background: white;";
-      tempDiv.innerHTML = pdfTemplate;
-      document.body.appendChild(tempDiv);
+      // Questions table
+      pdf.addPage();
+      pdf.setFillColor(...dark);
+      pdf.rect(0, 0, pageWidth, 30, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(18);
+      pdf.text("Question Breakdown", margin, 13);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.text(`${sub.total_correct} correct / ${(sub.total_questions || 0) - (sub.total_correct || 0)} wrong`, margin, 21);
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const tableBody = answers.map((a) => {
+        const opts = parseOptions(a.options);
+        const userOpt = opts.find(o => o.label === a.user_answer);
+        const correctOpt = opts.find(o => o.label === a.correct_answer);
+        const result = a.is_correct === true ? "Correct" : (a.is_correct === false ? "Wrong" : "Recorded");
+        return [
+          String(a.question_number || "-"),
+          stripHtml(a.question_text).replace(/\s+/g, " ").trim().substring(0, 100),
+          a.user_answer ? `${a.user_answer}${userOpt ? ". " + stripHtml(userOpt.text).replace(/\s+/g, " ").trim().substring(0, 30) : ""}` : "Skipped",
+          `${a.correct_answer}${correctOpt ? ". " + stripHtml(correctOpt.text).replace(/\s+/g, " ").trim().substring(0, 30) : ""}`,
+          result,
+        ];
+      });
 
-      const opt = {
-        margin: 10,
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
+      autoTable(pdf, {
+        startY: 40,
+        head: [["#", "Question", "Student Answer", "Correct Answer", "Result"]],
+        body: tableBody,
+        theme: "grid",
+        margin: { left: margin, right: margin },
+        headStyles: { fillColor: dark, textColor: 255, fontSize: 8.5, halign: "left" },
+        styles: { fontSize: 8, cellPadding: 2.6, lineColor: border, lineWidth: 0.1, overflow: "linebreak", valign: "middle" },
+        bodyStyles: { textColor: [31, 41, 55] },
+        rowPageBreak: "avoid",
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 82 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 24, halign: "center", fontStyle: "bold" },
+        },
+        didParseCell: (hookData) => {
+          if (hookData.section !== "body" || hookData.column.index !== 4) return;
+          const result = String(hookData.cell.raw);
+          if (result === "Correct") hookData.cell.styles.textColor = green;
+          else if (result === "Wrong") hookData.cell.styles.textColor = red;
+          else if (result === "Recorded") hookData.cell.styles.textColor = muted;
+        },
+        didDrawPage: () => {
+          pdf.setTextColor(...muted);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8);
+          pdf.text("ChineseMath Submission Report", margin, pageHeight - 6);
+        },
+      });
 
-      await html2pdf().set(opt).from(tempDiv).save();
+      // Page numbers
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setTextColor(...muted);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 6, { align: "right" });
+      }
 
-      document.body.removeChild(tempDiv);
+      pdf.save(filename);
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Please try again.");
@@ -182,18 +246,9 @@ export default function AdminSubmissionDetail() {
 
   return (
     <AdminLayout>
-      <style>{`
-        .pdf-question {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .pdf-header {
-          page-break-after: avoid;
-        }
-      `}</style>
       <div className="p-8 max-w-5xl">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-6 no-print">
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => navigate("/admin/submissions")}
             className="flex items-center gap-2 text-gray-500 hover:text-red-600 text-sm transition"
@@ -211,7 +266,6 @@ export default function AdminSubmissionDetail() {
           </button>
         </div>
 
-        <div ref={contentRef} className="pdf-content">
         {/* Header Card */}
         <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-6 mb-6 text-white">
           <div className="flex items-start justify-between flex-wrap gap-4">
@@ -332,7 +386,6 @@ export default function AdminSubmissionDetail() {
               </div>
             );
           })}
-        </div>
         </div>
       </div>
     </AdminLayout>
