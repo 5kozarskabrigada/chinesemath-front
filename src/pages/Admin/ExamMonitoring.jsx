@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { 
   Monitor, 
@@ -21,8 +22,12 @@ import {
   RefreshCw
 } from "lucide-react";
 import io from 'socket.io-client';
+import { apiGetAdminExams } from "../../api";
 
-export default function ExamMonitoring({ examId }) {
+export default function ExamMonitoring({ examId: examIdProp }) {
+  const { examId: examIdParam } = useParams();
+  const navigate = useNavigate();
+  const examId = examIdProp || examIdParam;
   const [exam, setExam] = useState(null);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -34,6 +39,8 @@ export default function ExamMonitoring({ examId }) {
   const [phoneFrame, setPhoneFrame] = useState(null);
   const socketRef = useRef(null);
   const selectedStudentRef = useRef(null);
+  const [activeExams, setActiveExams] = useState([]);
+  const [loadingExams, setLoadingExams] = useState(false);
 
   // Keep ref in sync with state so socket handlers see latest value
   useEffect(() => {
@@ -43,10 +50,23 @@ export default function ExamMonitoring({ examId }) {
     setPhoneFrame(null);
   }, [selectedStudent]);
 
+  // If no examId, fetch active exams so admin can select one
+  useEffect(() => {
+    if (!examId) {
+      setLoadingExams(true);
+      apiGetAdminExams()
+        .then(data => {
+          const exams = (data.exams || data || []).filter(e => !e.is_deleted);
+          setActiveExams(exams);
+        })
+        .catch(err => console.error('Failed to fetch exams:', err))
+        .finally(() => setLoadingExams(false));
+    }
+  }, [examId]);
+
   useEffect(() => {
     const initializeMonitoring = async () => {
       if (!examId || examId === 'undefined') {
-        console.warn('ExamMonitoring: examId is missing, skipping socket connection');
         return;
       }
 
@@ -209,6 +229,59 @@ export default function ExamMonitoring({ examId }) {
     }
   };
 
+  // If no examId, show exam selector
+  if (!examId) {
+    return (
+      <AdminLayout>
+        <div className="p-6">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <Monitor className="w-8 h-8 text-red-600" />
+              Exam Monitoring
+            </h1>
+            <p className="text-gray-600 mt-1">Select an exam to monitor</p>
+          </div>
+
+          {loadingExams ? (
+            <div className="text-center py-12">
+              <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Loading exams...</p>
+            </div>
+          ) : activeExams.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+              <Monitor className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Exams Available</h3>
+              <p className="text-gray-600">Create an exam first, then come back to monitor it.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeExams.map(ex => (
+                <div
+                  key={ex.id}
+                  onClick={() => navigate(`/admin/exams/${ex.id}/monitor`)}
+                  className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition border-2 border-transparent hover:border-red-500"
+                >
+                  <h3 className="font-semibold text-gray-900 text-lg mb-2">{ex.title}</h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${ex.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {ex.status || 'draft'}
+                    </span>
+                    {ex.is_active && <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Active</span>}
+                  </div>
+                  <p className="text-sm text-gray-500">Code: {ex.code || 'N/A'}</p>
+                  <button className="mt-4 w-full px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center justify-center gap-2">
+                    <Eye className="w-4 h-4" />
+                    Monitor
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout>
       <div className="p-6">
@@ -219,7 +292,7 @@ export default function ExamMonitoring({ examId }) {
               <Monitor className="w-8 h-8 text-red-600" />
               Exam Monitoring
             </h1>
-            <p className="text-gray-600 mt-1">Live dual-camera monitoring for {exam?.title}</p>
+            <p className="text-gray-600 mt-1">Live dual-camera monitoring {exam?.title ? `for ${exam.title}` : examId ? `(Exam ${examId})` : ''}</p>
           </div>
           
           <div className="flex items-center gap-4">
