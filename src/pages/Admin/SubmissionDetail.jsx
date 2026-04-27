@@ -10,12 +10,34 @@ import { renderMath } from "../../utils/math";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// Extract text from KaTeX HTML while preserving math symbols
-function extractMathText(html) {
-  if (!html) return "";
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return div.textContent || div.innerText || "";
+// Convert LaTeX to readable text for PDF
+function latexToText(latex) {
+  if (!latex) return "";
+  // Remove LaTeX delimiters
+  let text = latex
+    .replace(/\\\[/g, "")
+    .replace(/\\\]/g, "")
+    .replace(/\$\$/g, "")
+    .replace(/\$/g, "")
+    .replace(/\\{/g, "{")
+    .replace(/\\}/g, "}")
+    .replace(/\\\\/g, "\n");
+  // Replace common LaTeX commands with readable text
+  text = text
+    .replace(/\\frac{([^}]+)}{([^}]+)}/g, "($1)/$2")
+    .replace(/\\sqrt{([^}]+)}/g, "√($1)")
+    .replace(/\\sum/g, "∑")
+    .replace(/\\int/g, "∫")
+    .replace(/\\infty/g, "∞")
+    .replace(/\\pi/g, "π")
+    .replace(/\\theta/g, "θ")
+    .replace(/\\alpha/g, "α")
+    .replace(/\\beta/g, "β")
+    .replace(/\\gamma/g, "γ")
+    .replace(/\\delta/g, "δ")
+    .replace(/\^([a-zA-Z0-9])/g, "^$1")
+    .replace(/_([a-zA-Z0-9])/g, "_$1");
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function parseOptions(raw) {
@@ -183,15 +205,14 @@ export default function AdminSubmissionDetail() {
         const correctOpt = opts.find(o => o.label === a.correct_answer);
         const result = a.is_correct === true ? "Correct" : (a.is_correct === false ? "Wrong" : "Recorded");
         
-        // Render math first, then extract text to preserve symbols
-        const renderedQuestion = renderMath(a.question_text);
-        const questionText = extractMathText(renderedQuestion).replace(/\s+/g, " ").trim().substring(0, 100);
+        // Convert LaTeX to readable text for PDF
+        const questionText = latexToText(a.question_text).substring(0, 100);
         
         const userAnswerText = a.user_answer 
-          ? `${a.user_answer}${userOpt ? ". " + extractMathText(renderMath(userOpt.text)).replace(/\s+/g, " ").trim().substring(0, 30) : ""}`
+          ? `${a.user_answer}${userOpt ? ". " + latexToText(userOpt.text).substring(0, 30) : ""}`
           : "Skipped";
         
-        const correctAnswerText = `${a.correct_answer}${correctOpt ? ". " + extractMathText(renderMath(correctOpt.text)).replace(/\s+/g, " ").trim().substring(0, 30) : ""}`;
+        const correctAnswerText = `${a.correct_answer}${correctOpt ? ". " + latexToText(correctOpt.text).substring(0, 30) : ""}`;
 
         return [
           String(a.question_number || "-"),
