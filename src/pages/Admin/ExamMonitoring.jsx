@@ -30,64 +30,73 @@ export default function ExamMonitoring({ examId }) {
   const [alerts, setAlerts] = useState([]);
   const [customMessage, setCustomMessage] = useState('');
   const [messageHistory, setMessageHistory] = useState([]);
+  const [laptopFrame, setLaptopFrame] = useState(null);
+  const [phoneFrame, setPhoneFrame] = useState(null);
   const socketRef = useRef(null);
-  const laptopVideoRef = useRef(null);
-  const phoneVideoRef = useRef(null);
+  const selectedStudentRef = useRef(null);
+
+  // Keep ref in sync with state so socket handlers see latest value
+  useEffect(() => {
+    selectedStudentRef.current = selectedStudent;
+    // Clear frames when switching students
+    setLaptopFrame(null);
+    setPhoneFrame(null);
+  }, [selectedStudent]);
 
   useEffect(() => {
     const initializeMonitoring = async () => {
-      // Don't initialize if examId is missing
       if (!examId || examId === 'undefined') {
         console.warn('ExamMonitoring: examId is missing, skipping socket connection');
         return;
       }
 
       try {
-        // Initialize socket connection for admin monitoring
         const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
         socketRef.current = io(baseURL, {
           query: { examId, type: 'admin' },
           reconnection: true,
-          reconnectionAttempts: 5,
+          reconnectionAttempts: 10,
           reconnectionDelay: 2000
         });
 
         socketRef.current.on('connect', () => {
           setConnectionStatus(true);
-          console.log('Connected to monitoring server');
+          console.log('Admin connected to monitoring server');
         });
 
         socketRef.current.on('disconnect', () => {
           setConnectionStatus(false);
-          console.log('Disconnected from monitoring server');
+          console.log('Admin disconnected from monitoring server');
         });
 
-        // Listen for student connections
-        socketRef.current.on('student_connected', (studentData) => {
+        // Student joined — backend emits "student_joined" with { studentId, socketId }
+        socketRef.current.on('student_joined', (data) => {
+          console.log('Student joined:', data);
           setStudents(prev => {
-            const existing = prev.find(s => s.id === studentData.id);
+            const existing = prev.find(s => s.id === data.studentId);
             if (existing) {
-              return prev.map(s => s.id === studentData.id ? { ...s, ...studentData, connected: true } : s);
+              return prev.map(s => s.id === data.studentId ? { ...s, connected: true } : s);
             }
-            return [...prev, { ...studentData, connected: true }];
+            return [...prev, { id: data.studentId, name: data.studentId, connected: true, laptopCamera: { active: false }, phoneCamera: { active: false } }];
           });
         });
 
-        socketRef.current.on('student_disconnected', (studentId) => {
+        // Student left — backend emits "student_left" with { studentId }
+        socketRef.current.on('student_left', (data) => {
+          console.log('Student left:', data);
           setStudents(prev => 
-            prev.map(s => s.id === studentId ? { ...s, connected: false } : s)
+            prev.map(s => s.id === data.studentId ? { ...s, connected: false } : s)
           );
-          
           setAlerts(prev => [...prev, {
             id: Date.now(),
             type: 'disconnect',
-            studentId,
-            message: `Student disconnected`,
+            studentId: data.studentId,
+            message: `Student ${data.studentId} disconnected`,
             timestamp: new Date()
           }]);
         });
 
-        // Listen for camera status updates
+        // Camera status updates
         socketRef.current.on('camera_status', (data) => {
           setStudents(prev => 
             prev.map(s => s.id === data.studentId ? { 
@@ -98,7 +107,7 @@ export default function ExamMonitoring({ examId }) {
           );
         });
 
-        // Listen for camera errors
+        // Camera errors
         socketRef.current.on('camera_error', (data) => {
           setAlerts(prev => [...prev, {
             id: Date.now(),
@@ -109,35 +118,27 @@ export default function ExamMonitoring({ examId }) {
           }]);
         });
 
-        // Listen for laptop camera stream
+        // Laptop camera snapshot — data.data is a base64 JPEG data URL
         socketRef.current.on('student_camera_stream', (data) => {
-          if (selectedStudent?.id === data.studentId && data.data) {
-            const blob = new Blob([data.data], { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            if (laptopVideoRef.current) {
-              laptopVideoRef.current.src = url;
-            }
+          if (selectedStudentRef.current?.id === data.studentId && data.data) {
+            setLaptopFrame(data.data);
           }
         });
 
-        // Listen for phone camera stream
+        // Phone camera snapshot — data.data is a base64 JPEG data URL
         socketRef.current.on('student_phone_camera_stream', (data) => {
-          if (selectedStudent?.id === data.studentId && data.data) {
-            const blob = new Blob([data.data], { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            if (phoneVideoRef.current) {
-              phoneVideoRef.current.src = url;
-            }
+          if (selectedStudentRef.current?.id === data.studentId && data.data) {
+            setPhoneFrame(data.data);
           }
         });
 
-        // Listen for exam violations
-        socketRef.current.on('exam_violation', (data) => {
+        // Violations
+        socketRef.current.on('student_violation', (data) => {
           setAlerts(prev => [...prev, {
             id: Date.now(),
             type: 'violation',
             studentId: data.studentId,
-            message: data.violation,
+            message: `${data.violationType} (severity: ${data.severity})`,
             timestamp: new Date()
           }]);
         });
@@ -173,7 +174,7 @@ export default function ExamMonitoring({ examId }) {
       setMessageHistory(prev => [...prev, {
         id: Date.now(),
         studentId: selectedStudent.id,
-        studentName: selectedStudent.name || `Student ${selectedStudent.id.slice(0, 8)}`,
+        studentName: selectedStudent.name || selectedStudent.id,
         message,
         messageType,
         timestamp: new Date()
@@ -370,15 +371,16 @@ export default function ExamMonitoring({ examId }) {
                     </div>
                     
                     <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                      <video
-                        ref={laptopVideoRef}
-                        autoPlay
-                        muted
-                        className="w-full h-full object-cover"
-                      />
-                      {!selectedStudent.laptopCamera?.active && (
-                        <div className="absolute inset-0 flex items-center justify-center">
+                      {laptopFrame ? (
+                        <img
+                          src={laptopFrame}
+                          alt="Laptop camera"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
                           <Camera className="w-12 h-12 text-gray-600" />
+                          <span className="text-gray-500 text-xs mt-2">Waiting for stream...</span>
                         </div>
                       )}
                     </div>
@@ -400,15 +402,16 @@ export default function ExamMonitoring({ examId }) {
                     </div>
                     
                     <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                      <video
-                        ref={phoneVideoRef}
-                        autoPlay
-                        muted
-                        className="w-full h-full object-cover"
-                      />
-                      {!selectedStudent.phoneCamera?.active && (
-                        <div className="absolute inset-0 flex items-center justify-center">
+                      {phoneFrame ? (
+                        <img
+                          src={phoneFrame}
+                          alt="Phone camera"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
                           <Smartphone className="w-12 h-12 text-gray-600" />
+                          <span className="text-gray-500 text-xs mt-2">Waiting for stream...</span>
                         </div>
                       )}
                     </div>

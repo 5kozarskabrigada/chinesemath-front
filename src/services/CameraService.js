@@ -250,67 +250,69 @@ class CameraService {
     }
   }
 
-  // Start streaming laptop camera to admin
+  // Start streaming laptop camera to admin via JPEG snapshots
   startLaptopStreaming() {
     if (!this.laptopStream || !this.socket) return;
 
-    // Create media recorder for streaming
-    const mediaRecorder = new MediaRecorder(this.laptopStream, {
-      mimeType: 'video/webm; codecs=vp8,opus',
-      videoBitsPerSecond: 500000 // 500kbps for real-time streaming
-    });
+    const video = document.createElement('video');
+    video.srcObject = this.laptopStream;
+    video.muted = true;
+    video.play();
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0 && this.socket) {
-        // Send video chunks to admin via socket
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.socket.emit('camera_stream', {
-            cameraType: 'laptop',
-            data: reader.result,
-            timestamp: Date.now()
-          });
-        };
-        reader.readAsArrayBuffer(event.data);
+    const canvas = document.createElement('canvas');
+
+    this.laptopSnapshotInterval = setInterval(() => {
+      if (!this.socket || !this.isConnected || !this.laptopStream) return;
+      try {
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        this.socket.emit('camera_stream', {
+          cameraType: 'laptop',
+          data: dataUrl,
+          timestamp: Date.now()
+        });
+      } catch (e) {
+        console.warn('Laptop snapshot error:', e);
       }
-    };
+    }, 1000);
 
-    // Record in 1-second chunks for real-time streaming
-    mediaRecorder.start(1000);
-    
-    this.laptopRecorder = mediaRecorder;
-    return mediaRecorder;
+    this.laptopVideoEl = video;
+    return this.laptopSnapshotInterval;
   }
 
-  // Start streaming phone camera to admin
+  // Start streaming phone camera to admin via JPEG snapshots
   startPhoneStreaming() {
     if (!this.phoneStream || !this.socket) return;
 
-    // Create media recorder for streaming
-    const mediaRecorder = new MediaRecorder(this.phoneStream, {
-      mimeType: 'video/webm; codecs=vp8,opus',
-      videoBitsPerSecond: 500000 // 500kbps for real-time streaming
-    });
+    const video = document.createElement('video');
+    video.srcObject = this.phoneStream;
+    video.muted = true;
+    video.play();
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0 && this.socket) {
-        // Send video chunks to admin via socket
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.socket.emit('phone_camera_stream', {
-            data: reader.result,
-            timestamp: Date.now()
-          });
-        };
-        reader.readAsArrayBuffer(event.data);
+    const canvas = document.createElement('canvas');
+
+    this.phoneSnapshotInterval = setInterval(() => {
+      if (!this.socket || !this.isConnected || !this.phoneStream) return;
+      try {
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        this.socket.emit('phone_camera_stream', {
+          data: dataUrl,
+          timestamp: Date.now()
+        });
+      } catch (e) {
+        console.warn('Phone snapshot error:', e);
       }
-    };
+    }, 1000);
 
-    // Record in 1-second chunks for real-time streaming
-    mediaRecorder.start(1000);
-    
-    this.phoneRecorder = mediaRecorder;
-    return mediaRecorder;
+    this.phoneVideoEl = video;
+    return this.phoneSnapshotInterval;
   }
 
   // Send current camera status to admin
@@ -400,14 +402,24 @@ class CameraService {
 
   // Cleanup resources
   cleanup() {
-    if (this.laptopRecorder) {
-      this.laptopRecorder.stop();
-      this.laptopRecorder = null;
+    if (this.laptopSnapshotInterval) {
+      clearInterval(this.laptopSnapshotInterval);
+      this.laptopSnapshotInterval = null;
     }
 
-    if (this.phoneRecorder) {
-      this.phoneRecorder.stop();
-      this.phoneRecorder = null;
+    if (this.phoneSnapshotInterval) {
+      clearInterval(this.phoneSnapshotInterval);
+      this.phoneSnapshotInterval = null;
+    }
+
+    if (this.laptopVideoEl) {
+      this.laptopVideoEl.srcObject = null;
+      this.laptopVideoEl = null;
+    }
+
+    if (this.phoneVideoEl) {
+      this.phoneVideoEl.srcObject = null;
+      this.phoneVideoEl = null;
     }
 
     if (this.laptopStream) {

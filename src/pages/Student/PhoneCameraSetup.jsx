@@ -49,6 +49,9 @@ export default function PhoneCameraSetup() {
         // Initialize phone camera
         await CameraService.initializePhoneCamera();
 
+        // Start camera health check
+        CameraService.startCameraHealthCheck();
+
         // Emit socket event to notify laptop that phone camera is ready
         if (CameraService.socket) {
           CameraService.socket.emit('phone_camera_ready', { examId, studentId });
@@ -127,6 +130,12 @@ export default function PhoneCameraSetup() {
         audio: false
       };
 
+      // Stop old phone snapshot interval before restarting
+      if (CameraService.phoneSnapshotInterval) {
+        clearInterval(CameraService.phoneSnapshotInterval);
+        CameraService.phoneSnapshotInterval = null;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       CameraService.phoneStream = stream;
       setCameraReady(true);
@@ -138,6 +147,9 @@ export default function PhoneCameraSetup() {
       if (!CameraService.socket) {
         await CameraService.initializeSocket(examId, studentId);
       }
+
+      // Restart phone streaming with new camera
+      CameraService.startPhoneStreaming();
 
       // Emit socket event to notify laptop that phone camera is ready
       if (CameraService.socket) {
