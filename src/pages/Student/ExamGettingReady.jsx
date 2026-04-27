@@ -110,12 +110,14 @@ export default function ExamGettingReady() {
           setLaptopCameraReady(true);
           if (laptopVideoRef.current) {
             laptopVideoRef.current.srcObject = stream;
+            laptopVideoRef.current.play().catch(e => console.warn('Video play error:', e));
           }
         },
         onPhoneCameraReady: (stream) => {
           setPhoneCameraReady(true);
           if (phoneVideoRef.current) {
             phoneVideoRef.current.srcObject = stream;
+            phoneVideoRef.current.play().catch(e => console.warn('Phone video play error:', e));
           }
         },
         onConnectionStatus: setConnectionStatus,
@@ -143,15 +145,26 @@ export default function ExamGettingReady() {
     initializeCameraService();
 
     // Listen for phone camera ready event via Socket.IO
+    const handlePhoneCameraReady = (data) => {
+      console.log('Received phone_camera_ready event:', data);
+      console.log('Current user ID:', user?.id);
+      if (data.studentId === user?.id) {
+        setPhoneCameraReady(true);
+        console.log('Phone camera marked as ready');
+      }
+    };
+
     if (CameraService.socket) {
-      CameraService.socket.on('phone_camera_ready', (data) => {
-        console.log('Received phone_camera_ready event:', data);
-        console.log('Current user ID:', user?.id);
-        if (data.studentId === user?.id) {
-          setPhoneCameraReady(true);
-          console.log('Phone camera marked as ready');
+      CameraService.socket.on('phone_camera_ready', handlePhoneCameraReady);
+    } else {
+      // If socket is not ready yet, wait for it
+      const socketCheckInterval = setInterval(() => {
+        if (CameraService.socket) {
+          CameraService.socket.on('phone_camera_ready', handlePhoneCameraReady);
+          clearInterval(socketCheckInterval);
         }
-      });
+      }, 500);
+      return () => clearInterval(socketCheckInterval);
     }
 
     // Poll API endpoint as fallback for phone camera ready status
@@ -175,7 +188,7 @@ export default function ExamGettingReady() {
 
     return () => {
       if (CameraService.socket) {
-        CameraService.socket.off('phone_camera_ready');
+        CameraService.socket.off('phone_camera_ready', handlePhoneCameraReady);
       }
       clearInterval(pollInterval);
       if (healthCheckInterval.current) {
@@ -229,6 +242,12 @@ export default function ExamGettingReady() {
   // Handle phone camera test
   const testPhoneCamera = () => {
     setCurrentStep(3);
+  };
+
+  // Refresh phone camera connection
+  const refreshPhoneCamera = () => {
+    setPhoneCameraReady(false);
+    // The polling mechanism will detect when it's ready again
   };
 
   // Handle consent and start countdown

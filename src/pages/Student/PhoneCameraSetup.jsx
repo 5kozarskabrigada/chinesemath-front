@@ -23,6 +23,10 @@ export default function PhoneCameraSetup() {
             setCameraReady(true);
             if (videoRef.current) {
               videoRef.current.srcObject = stream;
+              videoRef.current.play().catch(e => {
+                console.error('Video play error:', e);
+                setError('Video playback failed. Please try again.');
+              });
             }
           },
           onError: setError
@@ -141,6 +145,9 @@ export default function PhoneCameraSetup() {
       setCameraReady(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(e => {
+          console.error('Video play error after switch:', e);
+        });
       }
 
       // Reconnect socket if disconnected
