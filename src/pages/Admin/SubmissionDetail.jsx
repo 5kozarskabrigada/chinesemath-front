@@ -10,18 +10,12 @@ import { renderMath } from "../../utils/math";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// Strip HTML for PDF text (like IELTS repo)
-function stripHtml(html) {
+// Extract text from HTML using DOM to handle encoding correctly
+function extractText(html) {
   if (!html) return "";
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .trim();
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent || div.innerText || "";
 }
 
 function parseOptions(raw) {
@@ -187,14 +181,15 @@ export default function AdminSubmissionDetail() {
         const correctOpt = opts.find(o => o.label === a.correct_answer);
         const result = a.is_correct === true ? "Correct" : (a.is_correct === false ? "Wrong" : "Recorded");
         
-        // Strip HTML for PDF (like IELTS repo)
-        const questionText = stripHtml(a.question_text).substring(0, 100);
+        // Render math first, then extract text to preserve encoding
+        const renderedQuestion = renderMath(a.question_text);
+        const questionText = extractText(renderedQuestion).substring(0, 100);
         
         const userAnswerText = a.user_answer 
-          ? `${a.user_answer}${userOpt ? ". " + stripHtml(userOpt.text).substring(0, 30) : ""}`
+          ? `${a.user_answer}${userOpt ? ". " + extractText(renderMath(userOpt.text)).substring(0, 30) : ""}`
           : "Skipped";
         
-        const correctAnswerText = `${a.correct_answer}${correctOpt ? ". " + stripHtml(correctOpt.text).substring(0, 30) : ""}`;
+        const correctAnswerText = `${a.correct_answer}${correctOpt ? ". " + extractText(renderMath(correctOpt.text)).substring(0, 30) : ""}`;
 
         return [
           String(a.question_number || "-"),
