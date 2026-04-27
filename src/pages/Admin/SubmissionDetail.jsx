@@ -4,10 +4,9 @@ import AdminLayout from "../../components/AdminLayout";
 import { apiGetSubmissionDetail } from "../../api";
 import {
   ArrowLeft, CheckCircle, XCircle, Download, Loader2,
-  User, Clock, FileText, Award
+  User, Clock, FileText, Award, Printer
 } from "lucide-react";
 import { renderMath } from "../../utils/math";
-import html2pdf from "html2pdf.js";
 
 function parseOptions(raw) {
   if (!raw) return [];
@@ -43,128 +42,9 @@ export default function AdminSubmissionDetail() {
       .finally(() => setLoading(false));
   }, [submissionId]);
 
-  const handleDownloadPdf = async () => {
-    if (!data || downloadingPdf) return;
-    setDownloadingPdf(true);
-
-    try {
-      const { submission: sub, answers } = data;
-      const studentName = `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || sub.username || "Unknown";
-      const examTitle = sub.exam_title || "Exam";
-      const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
-
-      // Create a hidden printable element
-      const printableDiv = document.createElement("div");
-      printableDiv.style.cssText = `
-        position: fixed;
-        left: -9999px;
-        top: 0;
-        width: 210mm;
-        padding: 20px;
-        background: white;
-        font-family: Arial, sans-serif;
-        color: #111;
-      `;
-
-      const completedDate = sub.submitted_at
-        ? new Date(sub.submitted_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
-        : "N/A";
-
-      // Build HTML content
-      printableDiv.innerHTML = `
-        <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #111;">
-          <h1 style="margin: 0 0 5px 0; font-size: 24px; color: #111;">${examTitle}</h1>
-          <p style="margin: 0; font-size: 14px; color: #666;">Student: ${studentName} (@${sub.username})</p>
-          <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">Submitted: ${completedDate}</p>
-        </div>
-
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
-          <div style="padding: 15px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px;">Score</div>
-            <div style="font-size: 24px; font-weight: bold; color: ${sub.score >= 60 ? '#16a34a' : '#dc2626'};">${sub.score}%</div>
-          </div>
-          <div style="padding: 15px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px;">Correct</div>
-            <div style="font-size: 24px; font-weight: bold; color: #111;">${sub.total_correct}/${sub.total_questions}</div>
-          </div>
-          <div style="padding: 15px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px;">Time Spent</div>
-            <div style="font-size: 24px; font-weight: bold; color: #111;">${formatDuration(sub.time_spent)}</div>
-          </div>
-          <div style="padding: 15px; background: #dcfce7; border: 1px solid #86efac; border-radius: 8px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px;">Status</div>
-            <div style="font-size: 24px; font-weight: bold; color: #111;">${sub.status === "submitted" ? "Submitted" : (sub.status || "—")}</div>
-          </div>
-        </div>
-
-        <h2 style="margin: 0 0 15px 0; font-size: 18px; color: #111;">Question Breakdown</h2>
-
-        ${answers.map((a) => {
-          const opts = parseOptions(a.options);
-          return `
-            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid ${a.is_correct ? '#86efac' : '#fca5a5'}; border-radius: 8px; background: ${a.is_correct ? '#f0fdf4' : '#fef2f2'};">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                <span style="font-size: 12px; color: #6b7280; font-weight: 600;">Q${a.question_number}</span>
-                <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: ${a.is_correct ? '#dcfce7' : '#fecaca'}; color: ${a.is_correct ? '#16a34a' : '#dc2626'};">
-                  ${a.is_correct ? '✓ Correct' : '✗ Wrong'}
-                </span>
-              </div>
-              <div style="margin-bottom: 12px; font-size: 14px; line-height: 1.5;">${renderMath(a.question_text)}</div>
-              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                ${opts.map((opt) => {
-                  const isUserAnswer = a.user_answer === opt.label;
-                  const isCorrect = a.correct_answer === opt.label;
-                  let bg = '#f9fafb';
-                  let border = '#e5e7eb';
-                  let color = '#374151';
-                  if (isCorrect) { bg = '#dcfce7'; border = '#86efac'; color = '#166534'; }
-                  else if (isUserAnswer && !isCorrect) { bg = '#fecaca'; border = '#fca5a5'; color = '#991b1b'; }
-                  return `
-                    <div style="padding: 8px 12px; border: 2px solid ${border}; border-radius: 6px; background: ${bg}; color: ${color}; font-size: 13px;">
-                      <span style="font-weight: bold;">${opt.label}.</span> ${renderMath(opt.text)}
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-              ${!a.is_correct ? `
-                <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">
-                  Your answer: <strong style="color: #dc2626;">${a.user_answer || "Skipped"}</strong> ·
-                  Correct: <strong style="color: #16a34a;">${a.correct_answer}</strong>
-                </div>
-              ` : ''}
-              ${a.explanation ? `
-                <div style="margin-top: 10px; padding: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 12px; color: #1e40af;">
-                  <strong>Explanation:</strong> ${a.explanation}
-                </div>
-              ` : ''}
-            </div>
-          `;
-        }).join('')}
-      `;
-
-      document.body.appendChild(printableDiv);
-
-      // Wait for MathJax/KaTeX to render if present
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const opt = {
-        margin: 10,
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-
-      await html2pdf().set(opt).from(printableDiv).save();
-
-      document.body.removeChild(printableDiv);
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      setDownloadingPdf(false);
-    }
+  const handleDownloadPdf = () => {
+    if (!data) return;
+    window.print();
   };
 
   if (loading) {
@@ -186,9 +66,18 @@ export default function AdminSubmissionDetail() {
 
   return (
     <AdminLayout>
-      <div className="p-8 max-w-5xl">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body * { visibility: hidden; }
+          #submission-content, #submission-content * { visibility: visible; }
+          #submission-content { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+          .page-break { page-break-before: always; }
+        }
+      `}</style>
+      <div id="submission-content" className="p-8 max-w-5xl">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 no-print">
           <button
             onClick={() => navigate("/admin/submissions")}
             className="flex items-center gap-2 text-gray-500 hover:text-red-600 text-sm transition"
@@ -198,11 +87,10 @@ export default function AdminSubmissionDetail() {
           </button>
           <button
             onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition shadow-sm"
           >
-            {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            {downloadingPdf ? "Generating..." : "Download PDF"}
+            <Printer size={16} />
+            Print / Save as PDF
           </button>
         </div>
 
