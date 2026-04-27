@@ -3,8 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent } from "../../api";
 import { renderMath } from "../../utils/math";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize } from "lucide-react";
 import CameraService from "../../services/CameraService";
+import QRCode from "react-qr-code";
 
 export default function ExamPlayer() {
   const { examId } = useParams();
@@ -22,6 +23,7 @@ export default function ExamPlayer() {
   const [examTerminated, setExamTerminated] = useState(false);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
+  const examStartTimeRef = useRef(null);
 
   // Log exam event helper
   const logEvent = useCallback((eventType, eventData = {}) => {
@@ -31,69 +33,116 @@ export default function ExamPlayer() {
   }, [examId]);
 
   useEffect(() => {
+    // Enter fullscreen mode
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+          await document.documentElement.msRequestFullscreen();
+        }
+      } catch (error) {
+        console.warn('Fullscreen request failed:', error);
+      }
+    };
+
+    // Load saved state from localStorage
+    const savedState = localStorage.getItem(`exam_${examId}_state`);
+    const savedStartTime = localStorage.getItem(`exam_${examId}_start_time`);
+
     apiGetExamQuestions(examId)
       .then(async ({ exam: e, questions: qs }) => {
         setExam(e);
         setQuestions(qs);
-        setTimeLeft(e.duration_minutes * 60);
 
-        // Log exam started only once
-        if (!hasLoggedStartRef.current) {
+        if (savedState) {
+          // Restore saved state
+          const state = JSON.parse(savedState);
+          setAnswers(state.answers || {});
+          setCurrent(state.current || 0);
+          
+          // Calculate remaining time based on saved start time
+          if (savedStartTime) {
+            const elapsed = Math.floor((Date.now() - parseInt(savedStartTime)) / 1000);
+            const totalSeconds = e.duration_minutes * 60;
+            const remaining = Math.max(0, totalSeconds - elapsed);
+            setTimeLeft(remaining);
+            examStartTimeRef.current = parseInt(savedStartTime);
+          } else {
+            setTimeLeft(e.duration_minutes * 60);
+            const startTime = Date.now();
+            localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
+            examStartTimeRef.current = startTime;
+          }
+          
+          hasLoggedStartRef.current = true;
+        } else {
+          // New exam
+          setTimeLeft(e.duration_minutes * 60);
+          const startTime = Date.now();
+          localStorage.setItem(`exam_${examId}_start_time`, startTime.toString());
+          examStartTimeRef.current = startTime;
+          
           logEvent("exam_started", { examTitle: e.title, questionCount: qs.length });
           hasLoggedStartRef.current = true;
+          
+          // Enter fullscreen on new exam start
+          enterFullscreen();
+        }
 
-          // Initialize camera monitoring
-          try {
-            await CameraService.initializeSocket(examId, user?.id || 'unknown');
-            await CameraService.initializeLaptopCamera();
+        // Initialize camera monitoring
+        try {
+          await CameraService.initializeSocket(examId, user?.id || 'unknown');
+          await CameraService.initializeLaptopCamera();
 
-            // Start camera health check to send status updates to admin
-            CameraService.startCameraHealthCheck();
+          // Start camera health check to send status updates to admin
+          CameraService.startCameraHealthCheck();
 
-            // Listen for admin messages
-            CameraService.socket?.on('student_admin_message', (data) => {
-              console.log('Received admin message:', data);
-              setAdminMessage(data);
-              logEvent('admin_message_received', {
-                messageType: data.messageType,
-                message: data.message
-              });
-
-              // Handle disqualification
-              if (data.messageType === 'disqualify') {
-                setExamTerminated(true);
-                CameraService.cleanup();
-                setTimeout(() => {
-                  navigate('/student/dashboard');
-                }, 3000);
-              }
+          // Listen for admin messages
+          CameraService.socket?.on('student_admin_message', (data) => {
+            console.log('Received admin message:', data);
+            setAdminMessage(data);
+            logEvent('admin_message_received', {
+              messageType: data.messageType,
+              message: data.message
             });
 
-            // Listen for camera check requests
-            CameraService.socket?.on('student_camera_check_request', (data) => {
-              console.log('Camera check requested by admin');
-              logEvent('camera_check_requested', { timestamp: data.timestamp });
-            });
-
-            // Listen for exam termination
-            CameraService.socket?.on('student_exam_terminated', (data) => {
-              console.log('Exam terminated by admin');
+            // Handle disqualification
+            if (data.messageType === 'disqualify') {
               setExamTerminated(true);
-              logEvent('exam_terminated_by_admin', { timestamp: data.timestamp });
               CameraService.cleanup();
               setTimeout(() => {
                 navigate('/student/dashboard');
               }, 3000);
-            });
-          } catch (error) {
-            console.warn('Camera initialization failed:', error);
-            // Allow exam to continue even if camera fails
-          }
+            }
+          });
+
+          // Listen for camera check requests
+          CameraService.socket?.on('student_camera_check_request', (data) => {
+            console.log('Camera check requested by admin');
+            logEvent('camera_check_requested', { timestamp: data.timestamp });
+          });
+
+          // Listen for exam termination
+          CameraService.socket?.on('student_exam_terminated', (data) => {
+            console.log('Exam terminated by admin');
+            setExamTerminated(true);
+            logEvent('exam_terminated_by_admin', { timestamp: data.timestamp });
+            CameraService.cleanup();
+            setTimeout(() => {
+              navigate('/student/dashboard');
+            }, 3000);
+          });
+        } catch (error) {
+          console.warn('Camera initialization failed:', error);
+          // Allow exam to continue even if camera fails
         }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [examId, logEvent]);
+  }, [examId, logEvent, user?.id, navigate]);
 
   // Fullscreen detection
   useEffect(() => {
@@ -159,6 +208,28 @@ export default function ExamPlayer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft !== null]);
 
+  // Save state to localStorage on changes
+  useEffect(() => {
+    if (examId && questions.length > 0) {
+      const state = {
+        answers,
+        current,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`exam_${examId}_state`, JSON.stringify(state));
+    }
+  }, [answers, current, examId, questions.length]);
+
+  // Cleanup localStorage on submit
+  useEffect(() => {
+    return () => {
+      if (submitting) {
+        localStorage.removeItem(`exam_${examId}_state`);
+        localStorage.removeItem(`exam_${examId}_start_time`);
+      }
+    };
+  }, [submitting, examId]);
+
   const handleSubmit = useCallback(
     async (autoSubmit = false) => {
       if (submitting) return;
@@ -171,7 +242,7 @@ export default function ExamPlayer() {
       }
       setSubmitting(true);
       try {
-        const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        const timeSpent = examStartTimeRef.current ? Math.floor((Date.now() - examStartTimeRef.current) / 1000) : Math.floor((Date.now() - startTimeRef.current) / 1000);
         await apiSubmitExam(examId, answers, timeSpent);
         logEvent("exam_submitted", {
           answerCount: Object.keys(answers).length,
@@ -179,6 +250,9 @@ export default function ExamPlayer() {
           timeSpent,
           autoSubmit
         });
+        // Cleanup localStorage
+        localStorage.removeItem(`exam_${examId}_state`);
+        localStorage.removeItem(`exam_${examId}_start_time`);
         CameraService.cleanup();
         navigate(`/student/exam/${examId}/result`);
       } catch (error) {
@@ -307,24 +381,22 @@ export default function ExamPlayer() {
         </div>
       )}
 
-      {/* Question navigator */}
+      {/* Phone QR Code for reconnection */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-6 py-3 flex flex-wrap gap-2">
-          {questions.map((qn, idx) => (
-            <button
-              key={qn.id}
-              onClick={() => setCurrent(idx)}
-              className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
-                idx === current
-                  ? "bg-red-600 text-white shadow"
-                  : answers[qn.id]
-                  ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-              }`}
-            >
-              {idx + 1}
-            </button>
-          ))}
+        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Smartphone size={18} className="text-gray-500" />
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">Phone Camera:</span> Scan to connect secondary camera
+            </div>
+          </div>
+          <div className="bg-white p-2 rounded-lg border border-gray-200">
+            <QRCode 
+              value={CameraService.generatePhoneURL(examId, user?.id || 'unknown')} 
+              size={64}
+              level="L"
+            />
+          </div>
         </div>
       </div>
 
