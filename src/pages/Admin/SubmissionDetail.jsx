@@ -13,18 +13,28 @@ import autoTable from "jspdf-autotable";
 // Convert LaTeX to readable text for PDF
 function latexToText(latex) {
   if (!latex) return "";
+  let text = latex;
+  
+  // Handle fractions first (nested)
+  let depth = 0;
+  while (text.includes('\\frac{') && depth < 5) {
+    text = text.replace(/\\frac{([^{}]+)}{([^{}]+)}/g, "($1)/($2)");
+    depth++;
+  }
+  
+  // Remove remaining braces
+  text = text.replace(/\\{/g, "{").replace(/\\}/g, "}");
+  
   // Remove LaTeX delimiters
-  let text = latex
+  text = text
     .replace(/\\\[/g, "")
     .replace(/\\\]/g, "")
     .replace(/\$\$/g, "")
     .replace(/\$/g, "")
-    .replace(/\\{/g, "{")
-    .replace(/\\}/g, "}")
     .replace(/\\\\/g, "\n");
+  
   // Replace common LaTeX commands with readable text
   text = text
-    .replace(/\\frac{([^}]+)}{([^}]+)}/g, "($1)/$2")
     .replace(/\\sqrt{([^}]+)}/g, "√($1)")
     .replace(/\\sum/g, "∑")
     .replace(/\\int/g, "∫")
@@ -35,8 +45,13 @@ function latexToText(latex) {
     .replace(/\\beta/g, "β")
     .replace(/\\gamma/g, "γ")
     .replace(/\\delta/g, "δ")
-    .replace(/\^([a-zA-Z0-9])/g, "^$1")
-    .replace(/_([a-zA-Z0-9])/g, "_$1");
+    .replace(/\\sin/g, "sin")
+    .replace(/\\cos/g, "cos")
+    .replace(/\\tan/g, "tan")
+    .replace(/\\angle/g, "∠")
+    .replace(/\^([a-zA-Z0-9]+)/g, "^$1")
+    .replace(/_([a-zA-Z0-9]+)/g, "_$1");
+  
   return text.replace(/\s+/g, " ").trim();
 }
 
@@ -85,10 +100,8 @@ export default function AdminSubmissionDetail() {
       const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
 
       const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 16;
-      const contentWidth = pageWidth - margin * 2;
+      // Use a font that supports more Unicode characters
+      pdf.setFont("helvetica");
       const dark = [17, 24, 39];
       const muted = [107, 114, 128];
       const border = [229, 231, 235];
