@@ -47,6 +47,9 @@ export default function ExamPlayer() {
             await CameraService.initializeSocket(examId, user?.id || 'unknown');
             await CameraService.initializeLaptopCamera();
 
+            // Start camera health check to send status updates to admin
+            CameraService.startCameraHealthCheck();
+
             // Listen for admin messages
             CameraService.socket?.on('student_admin_message', (data) => {
               console.log('Received admin message:', data);

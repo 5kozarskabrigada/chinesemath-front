@@ -47,7 +47,9 @@ export default function ExamMonitoring({ examId }) {
         const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
         socketRef.current = io(baseURL, {
           query: { examId, type: 'admin' },
-          reconnection: false // Disable auto-reconnect to prevent spam
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 2000
         });
 
         socketRef.current.on('connect', () => {
@@ -107,15 +109,23 @@ export default function ExamMonitoring({ examId }) {
           }]);
         });
 
-        // Listen for video chunks
-        socketRef.current.on('video_chunk', (data) => {
-          if (selectedStudent?.id === data.studentId) {
+        // Listen for laptop camera stream
+        socketRef.current.on('student_camera_stream', (data) => {
+          if (selectedStudent?.id === data.studentId && data.data) {
             const blob = new Blob([data.data], { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
-            
-            if (data.type === 'laptop' && laptopVideoRef.current) {
+            if (laptopVideoRef.current) {
               laptopVideoRef.current.src = url;
-            } else if (data.type === 'phone' && phoneVideoRef.current) {
+            }
+          }
+        });
+
+        // Listen for phone camera stream
+        socketRef.current.on('student_phone_camera_stream', (data) => {
+          if (selectedStudent?.id === data.studentId && data.data) {
+            const blob = new Blob([data.data], { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            if (phoneVideoRef.current) {
               phoneVideoRef.current.src = url;
             }
           }

@@ -54,8 +54,8 @@ class CameraService {
         query: { examId, studentId, type: 'student' },
         timeout: 10000,
         forceNew: true,
-        reconnection: false,
-        reconnectionAttempts: 1,
+        reconnection: true,
+        reconnectionAttempts: 5,
         reconnectionDelay: 2000
       });
 
@@ -140,6 +140,11 @@ class CameraService {
       // Start streaming to admin if socket is ready
       if (this.socket && this.isConnected) {
         this.startLaptopStreaming();
+      } else if (this.socket) {
+        // Wait for socket to connect, then start streaming
+        this.socket.on('connect', () => {
+          this.startLaptopStreaming();
+        });
       }
 
       return this.laptopStream;
@@ -202,6 +207,16 @@ class CameraService {
           stream: this.phoneStream
         }, '*');
       }
+      
+      // Start streaming to admin if socket is ready
+      if (this.socket && this.isConnected) {
+        this.startPhoneStreaming();
+      } else if (this.socket) {
+        // Wait for socket to connect, then start streaming
+        this.socket.on('connect', () => {
+          this.startPhoneStreaming();
+        });
+      }
 
       return this.phoneStream;
     } catch (error) {
@@ -250,8 +265,8 @@ class CameraService {
         // Send video chunks to admin via socket
         const reader = new FileReader();
         reader.onload = () => {
-          this.socket.emit('video_chunk', {
-            type: 'laptop',
+          this.socket.emit('camera_stream', {
+            cameraType: 'laptop',
             data: reader.result,
             timestamp: Date.now()
           });
@@ -263,6 +278,38 @@ class CameraService {
     // Record in 1-second chunks for real-time streaming
     mediaRecorder.start(1000);
     
+    this.laptopRecorder = mediaRecorder;
+    return mediaRecorder;
+  }
+
+  // Start streaming phone camera to admin
+  startPhoneStreaming() {
+    if (!this.phoneStream || !this.socket) return;
+
+    // Create media recorder for streaming
+    const mediaRecorder = new MediaRecorder(this.phoneStream, {
+      mimeType: 'video/webm; codecs=vp8,opus',
+      videoBitsPerSecond: 500000 // 500kbps for real-time streaming
+    });
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0 && this.socket) {
+        // Send video chunks to admin via socket
+        const reader = new FileReader();
+        reader.onload = () => {
+          this.socket.emit('phone_camera_stream', {
+            data: reader.result,
+            timestamp: Date.now()
+          });
+        };
+        reader.readAsArrayBuffer(event.data);
+      }
+    };
+
+    // Record in 1-second chunks for real-time streaming
+    mediaRecorder.start(1000);
+    
+    this.phoneRecorder = mediaRecorder;
     return mediaRecorder;
   }
 
@@ -353,6 +400,16 @@ class CameraService {
 
   // Cleanup resources
   cleanup() {
+    if (this.laptopRecorder) {
+      this.laptopRecorder.stop();
+      this.laptopRecorder = null;
+    }
+
+    if (this.phoneRecorder) {
+      this.phoneRecorder.stop();
+      this.phoneRecorder = null;
+    }
+
     if (this.laptopStream) {
       this.laptopStream.getTracks().forEach(track => track.stop());
       this.laptopStream = null;
