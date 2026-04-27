@@ -21,6 +21,7 @@ jobs:
             git reset --hard origin/main
             echo REACT_APP_API_URL="${{ secrets.REACT_APP_API_URL }}" > .env
             docker compose down
-            docker compose up -d --build
+            docker compose build --no-cache
+            docker compose up -d
             sleep 5
             curl -sf http://localhost:3000/ || exit 1
