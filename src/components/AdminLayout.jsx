@@ -55,7 +55,7 @@ export default function AdminLayout({ children }) {
                 <span className="text-white text-base font-bold">M</span>
               </div>
               <div className="min-w-0">
-                <p className="font-bold text-gray-900 text-sm truncate">Math Exam Platform</p>
+                <p className="font-bold text-gray-900 text-sm truncate">Chinese Math</p>
                 <p className="text-xs text-gray-500">Admin Console</p>
               </div>
             </div>

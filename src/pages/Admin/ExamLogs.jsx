@@ -9,21 +9,30 @@ import {
 } from "lucide-react";
 
 const EVENT_CONFIG = {
-  exam_started:               { label: "Started Exam",                      icon: LogIn,            color: "bg-green-50 border-green-200",  badge: null,              description: (log) => `${studentName(log)} started the exam` },
-  exam_joined:                { label: "Joined Exam",                       icon: Activity,         color: "bg-blue-50 border-blue-200",    badge: null,              description: (log) => `${studentName(log)} joined the exam session` },
-  exam_submitted:             { label: "Submitted Exam",                    icon: CheckCircle,      color: "bg-purple-50 border-purple-200", badge: null,             description: (log) => `${studentName(log)} submitted their answers` },
-  fullscreen_exit:            { label: "Left Fullscreen",                   icon: EyeOff,           color: "bg-red-50 border-red-200",      badge: "Suspicious",      description: (log) => `${studentName(log)} exited fullscreen mode — may indicate attempt to access other applications` },
-  fullscreen_enter:           { label: "Entered Fullscreen",                icon: Eye,              color: "bg-green-50 border-green-200",  badge: null,              description: (log) => `${studentName(log)} returned to fullscreen mode` },
-  window_blur:                { label: "Switched Away from Exam",           icon: AlertTriangle,    color: "bg-red-50 border-red-200",      badge: "Suspicious",      description: (log) => `${studentName(log)} clicked outside the exam window — possible tab switch or use of another application` },
-  window_focus:               { label: "Returned to Exam",                  icon: MousePointerClick, color: "bg-blue-50 border-blue-200",   badge: null,              description: (log) => `${studentName(log)} returned focus to the exam window` },
-  tab_hidden:                 { label: "Switched to Another Tab",           icon: AlertTriangle,    color: "bg-red-50 border-red-200",      badge: "Suspicious",      description: (log) => `${studentName(log)} switched to a different browser tab — they may be looking up answers` },
-  tab_visible:                { label: "Returned to Exam Tab",              icon: Eye,              color: "bg-green-50 border-green-200",  badge: null,              description: (log) => `${studentName(log)} came back to the exam tab` },
-  monitoring_message:         { label: "Admin Sent Message",                icon: MessageSquare,    color: "bg-purple-50 border-purple-200", badge: null,             description: (log) => { const d = log.event_data || {}; return `Admin sent a message to ${studentName(log)}: "${d.message || ''}"`; } },
-  monitoring_disqualify:      { label: "Student Disqualified",              icon: UserX,            color: "bg-red-50 border-red-200",      badge: "Disqualified",    description: (log) => `${studentName(log)} was disqualified from the exam by the administrator` },
-  monitoring_camera_check:    { label: "Camera Check Requested",            icon: Camera,           color: "bg-yellow-50 border-yellow-200", badge: null,             description: (log) => `Admin requested a camera check for ${studentName(log)}` },
-  monitoring_violation:       { label: "Violation Detected",                icon: Shield,           color: "bg-red-50 border-red-200",      badge: "Violation",       description: (log) => { const d = log.event_data || {}; return `Violation detected for ${studentName(log)}: ${d.type || 'unknown'} (severity: ${d.severity || 'unknown'})`; } },
-  monitoring_student_joined:  { label: "Student Connected to Monitoring",   icon: Wifi,             color: "bg-blue-50 border-blue-200",    badge: null,              description: (log) => `${studentName(log)} connected to the live monitoring system` },
-  monitoring_student_left:    { label: "Student Disconnected from Monitoring", icon: WifiOff,        color: "bg-orange-50 border-orange-200", badge: null,             description: (log) => `${studentName(log)} disconnected from the live monitoring system` },
+  exam_started:               { label: "Started Exam",                      icon: LogIn,            color: "bg-green-50",  badge: null },
+  exam_joined:                { label: "Joined Exam",                       icon: Activity,         color: "bg-blue-50",    badge: null },
+  exam_submitted:             { label: "Submitted Exam",                    icon: CheckCircle,      color: "bg-purple-50", badge: null },
+  fullscreen_exit:            { label: "Left Fullscreen",                   icon: EyeOff,           color: "bg-red-50",      badge: "⚠️" },
+  fullscreen_enter:           { label: "Entered Fullscreen",                icon: Eye,              color: "bg-green-50",  badge: null },
+  window_blur:                { label: "Switched Away",                     icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  window_focus:               { label: "Returned to Exam",                  icon: MousePointerClick, color: "bg-blue-50",   badge: null },
+  tab_hidden:                 { label: "Switched Tab",                      icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  tab_visible:                { label: "Returned to Tab",                   icon: Eye,              color: "bg-green-50",  badge: null },
+  monitoring_message:         { label: "Admin Message",                    icon: MessageSquare,    color: "bg-purple-50", badge: null },
+  monitoring_disqualify:      { label: "Disqualified",                      icon: UserX,            color: "bg-red-50",      badge: "❌" },
+  monitoring_camera_check:    { label: "Camera Check",                      icon: Camera,           color: "bg-yellow-50", badge: null },
+  monitoring_violation:       { label: "Violation",                         icon: Shield,           color: "bg-red-50",      badge: "⚠️" },
+  monitoring_student_joined:  { label: "Connected",                         icon: Wifi,             color: "bg-blue-50",    badge: null },
+  monitoring_student_left:    { label: "Disconnected",                      icon: WifiOff,          color: "bg-orange-50", badge: null },
+  fullscreen_exit_violation:  { label: "Fullscreen Exit Violation",        icon: EyeOff,           color: "bg-red-50",      badge: "⚠️" },
+  esc_key_press_violation:    { label: "ESC Pressed",                       icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  multiple_monitors_detected:{ label: "Multiple Monitors",                 icon: Monitor,          color: "bg-red-50",      badge: "⚠️" },
+  exam_switch_violation:      { label: "Exam Switch",                       icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  context_menu_blocked:       { label: "Right Click Blocked",               icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  keyboard_shortcut_blocked: { label: "Shortcut Blocked",                  icon: AlertTriangle,    color: "bg-red-50",      badge: "⚠️" },
+  admin_message_received:     { label: "Admin Message Received",           icon: MessageSquare,    color: "bg-purple-50", badge: null },
+  camera_check_requested:     { label: "Camera Check Requested",           icon: Camera,           color: "bg-yellow-50", badge: null },
+  exam_terminated_by_admin:   { label: "Exam Terminated",                   icon: UserX,            color: "bg-red-50",      badge: "❌" },
 };
 
 function studentName(log) {
@@ -252,65 +261,52 @@ export default function ExamLogs() {
             <p className="text-gray-500 text-sm">Activity will appear here when students start taking exams.</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {logs.map((log) => {
-              const config = EVENT_CONFIG[log.event_type] || {
-                label: log.event_type.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-                icon: Activity,
-                color: "bg-gray-50 border-gray-200",
-                badge: null,
-                description: () => `${studentName(log)} — ${log.event_type}`
-              };
-              const IconComponent = config.icon;
-              const time = formatTime(log.created_at);
-              const desc = config.description(log);
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Event</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Student</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Exam</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => {
+                  const config = EVENT_CONFIG[log.event_type] || {
+                    label: log.event_type.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+                    icon: Activity,
+                    color: "bg-gray-50",
+                    badge: null
+                  };
+                  const IconComponent = config.icon;
+                  const time = formatTime(log.created_at);
 
-              return (
-                <div
-                  key={log.id}
-                  className={`border rounded-lg p-4 transition hover:shadow-md ${config.color}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex-shrink-0">
-                      <IconComponent className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center flex-wrap gap-2 mb-1">
-                        <span className="font-semibold text-gray-900 text-sm">{config.label}</span>
-                        {config.badge && (
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            config.badge === 'Disqualified' ? 'bg-red-600 text-white' :
-                            config.badge === 'Violation' ? 'bg-red-100 text-red-700' :
-                            'bg-orange-100 text-orange-700'
-                          }`}>
-                            {config.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-700 mb-2">{desc}</p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                        {log.username && (
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {log.first_name} {log.last_name}
-                          </span>
-                        )}
-                        {log.exam_title && (
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3 h-3" />
-                            {log.exam_title}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1" title={time.full}>
-                          <Clock className="w-3 h-3" />
-                          {time.relative ? `${time.relative} · ${time.full}` : time.full}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  return (
+                    <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <IconComponent className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-900">{config.label}</span>
+                          {config.badge && (
+                            <span className="text-xs">{config.badge}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {log.first_name} {log.last_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {log.exam_title || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500" title={time.full}>
+                        {time.relative}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

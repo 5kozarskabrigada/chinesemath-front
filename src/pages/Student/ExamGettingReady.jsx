@@ -82,6 +82,25 @@ export default function ExamGettingReady() {
     loadExamData();
   }, [examId, navigate]);
 
+  // Enter fullscreen mode
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+          await document.documentElement.msRequestFullscreen();
+        }
+      } catch (error) {
+        console.warn('Fullscreen request failed:', error);
+      }
+    };
+
+    enterFullscreen();
+  }, []);
+
   // Initialize camera service
   useEffect(() => {
     const initializeCameraService = async () => {

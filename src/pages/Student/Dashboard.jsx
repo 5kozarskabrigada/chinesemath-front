@@ -26,7 +26,7 @@ export default function StudentDashboard() {
               <span className="text-white text-lg font-bold">M</span>
             </div>
             <div>
-              <p className="font-bold text-gray-900 text-sm">Math Exam Platform</p>
+              <p className="font-bold text-gray-900 text-sm">Chinese Math</p>
               <p className="text-xs text-gray-500">Welcome, {user?.first_name} {user?.last_name}</p>
             </div>
           </div>

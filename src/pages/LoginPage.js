@@ -41,7 +41,7 @@ export default function LoginPage() {
             <span className="text-white text-2xl font-bold">M</span>
           </div>
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome Back</h2>
-          <p className="text-gray-500 mt-2">Middle School Math Mock Exam Platform</p>
+          <p className="text-gray-500 mt-2">Chinese Math Exam Platform</p>
         </div>
 
         {error && (
