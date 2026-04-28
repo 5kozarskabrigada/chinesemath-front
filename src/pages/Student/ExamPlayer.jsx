@@ -516,10 +516,6 @@ export default function ExamPlayer() {
       <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
-            <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
-          </div>
-          <div className="flex items-center gap-3">
             <button
               onClick={() => toggleMarkForReview(questions[current]?.id)}
               className={`p-2 rounded-lg transition ${
@@ -529,10 +525,12 @@ export default function ExamPlayer() {
             >
               <Star size={18} className={markedForReview.has(questions[current]?.id) ? 'fill-current' : ''} />
             </button>
-            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
-              <Clock size={14} />
-              <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
-            </div>
+            <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
+            <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
+          </div>
+          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
+            <Clock size={14} />
+            <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
           </div>
         </div>
       </header>
@@ -570,31 +568,12 @@ export default function ExamPlayer() {
         </div>
       )}
 
-      {/* Phone QR Code for reconnection */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Smartphone size={18} className="text-gray-500" />
-            <div className="text-sm text-gray-600">
-              <span className="font-medium">Phone Camera:</span> Scan to connect secondary camera
-            </div>
-          </div>
-          <div className="bg-white p-2 rounded-lg border border-gray-200">
-            <QRCode 
-              value={CameraService.generatePhoneURL(examId, user?.id || 'unknown')} 
-              size={64}
-              level="L"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Main content with sidebar */}
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Question navigation sidebar */}
-        <div className="w-64 bg-white border-r border-gray-100 p-4 overflow-y-auto">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Questions</h3>
-          <div className="grid grid-cols-6 gap-2">
+        <div className="w-48 bg-white border-r border-gray-100 p-3 overflow-y-auto">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Questions</h3>
+          <div className="grid grid-cols-4 gap-3">
             {Array.from({ length: 48 }, (_, i) => {
               const question = questions[i];
               const isAnswered = question && answers[question.id];
@@ -624,22 +603,22 @@ export default function ExamPlayer() {
               );
             })}
           </div>
-          
-          {/* Legend */}
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <div className="space-y-2 text-xs text-gray-600">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-100" />
-                <span>Answered</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-yellow-100" />
-                <span>Marked for review</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gray-50" />
-                <span>Not answered</span>
-              </div>
+
+          {/* Camera Preview */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video">
+              <video
+                ref={(videoEl) => {
+                  if (videoEl && CameraService.laptopStream) {
+                    videoEl.srcObject = CameraService.laptopStream;
+                    videoEl.play().catch(e => console.error('Video play error:', e));
+                  }
+                }}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         </div>
