@@ -482,11 +482,11 @@ export default function ExamPlayer() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={`min-h-screen bg-gray-50 flex flex-col ${isFullscreenBlocked ? 'blur-sm pointer-events-none' : ''}`}>
       {/* Fullscreen blocking overlay */}
       {isFullscreenBlocked && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-8 text-center max-w-md">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center pointer-events-auto">
+          <div className="bg-white rounded-2xl p-8 text-center max-w-md shadow-2xl">
             <AlertTriangle className="w-16 h-16 text-red-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
             <p className="text-gray-600 mb-6">You must be in fullscreen mode to continue the exam. Please click below to re-enter fullscreen.</p>
