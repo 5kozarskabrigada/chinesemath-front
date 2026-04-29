@@ -23,9 +23,18 @@ export default function ExamPlayer() {
   const [examTerminated, setExamTerminated] = useState(false);
   const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isFullscreenBlocked, setIsFullscreenBlocked] = useState(false);
+  const cameraVideoRef = useRef(null);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
   const examStartTimeRef = useRef(null);
+
+  // Camera stream attachment
+  useEffect(() => {
+    if (cameraVideoRef.current && CameraService.laptopStream) {
+      cameraVideoRef.current.srcObject = CameraService.laptopStream;
+      cameraVideoRef.current.play().catch(e => console.error('Video play error:', e));
+    }
+  }, [CameraService.laptopStream]);
 
   // Log exam event helper
   const logEvent = useCallback((eventType, eventData = {}) => {
@@ -514,23 +523,54 @@ export default function ExamPlayer() {
 
       {/* Top bar */}
       <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => toggleMarkForReview(questions[current]?.id)}
-              className={`p-2 rounded-lg transition ${
-                markedForReview.has(questions[current]?.id) ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-              }`}
-              title="Mark for review"
-            >
-              <Star size={18} className={markedForReview.has(questions[current]?.id) ? 'fill-current' : ''} />
-            </button>
-            <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
-            <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
+        <div className="max-w-7xl mx-auto px-6 py-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => toggleMarkForReview(questions[current]?.id)}
+                className={`p-2 rounded-lg transition ${
+                  markedForReview.has(questions[current]?.id) ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                }`}
+                title="Mark for review"
+              >
+                <Star size={18} className={markedForReview.has(questions[current]?.id) ? 'fill-current' : ''} />
+              </button>
+              <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
+              <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
+            </div>
+            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
+              <Clock size={14} />
+              <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+            </div>
           </div>
-          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
-            <Clock size={14} />
-            <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+          <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+            <button
+              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+              disabled={current === 0}
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft size={16} />
+              <span>Previous</span>
+            </button>
+
+            {current < questions.length - 1 ? (
+              <button
+                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm"
+              >
+                <span>Next</span>
+                <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => handleSubmit(false)}
+                disabled={submitting}
+                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70"
+              >
+                {submitting && <Loader2 size={16} className="animate-spin" />}
+                <span>Submit Exam</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -571,9 +611,23 @@ export default function ExamPlayer() {
       {/* Main content with sidebar */}
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Question navigation sidebar */}
-        <div className="w-48 bg-white border-r border-gray-100 p-3 overflow-y-auto">
+        <div className="w-56 bg-white border-r border-gray-100 p-3 overflow-y-auto">
+          {/* Student credentials */}
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                <span className="text-gray-500 text-xs">Photo</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{user?.name || 'Student Name'}</p>
+                <p className="text-xs text-gray-500">{user?.surname || 'Surname'}</p>
+                <p className="text-xs text-gray-400">ID: {user?.id || '---'}</p>
+              </div>
+            </div>
+          </div>
+
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Questions</h3>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-6 gap-2">
             {Array.from({ length: 48 }, (_, i) => {
               const question = questions[i];
               const isAnswered = question && answers[question.id];
@@ -608,12 +662,7 @@ export default function ExamPlayer() {
           <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video">
               <video
-                ref={(videoEl) => {
-                  if (videoEl && CameraService.laptopStream) {
-                    videoEl.srcObject = CameraService.laptopStream;
-                    videoEl.play().catch(e => console.error('Video play error:', e));
-                  }
-                }}
+                ref={cameraVideoRef}
                 autoPlay
                 muted
                 playsInline
@@ -624,8 +673,8 @@ export default function ExamPlayer() {
         </div>
 
         {/* Question body */}
-        <div className="flex-1 px-6 py-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+        <div className="flex-1 px-6 py-8 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 max-w-2xl w-full">
             <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-3">
               Question {current + 1} of {questions.length}
             </p>
@@ -634,7 +683,7 @@ export default function ExamPlayer() {
               dangerouslySetInnerHTML={{ __html: renderMath(q.question_text) }}
             />
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               {(typeof q.options === "string" ? JSON.parse(q.options) : q.options).map((opt) => {
                 const selected = answers[q.id] === opt.label;
                 return (
@@ -655,37 +704,6 @@ export default function ExamPlayer() {
                 );
               })}
             </div>
-          </div>
-
-          {/* Navigation buttons */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              <ChevronLeft size={16} />
-              <span>Previous</span>
-            </button>
-
-            {current < questions.length - 1 ? (
-              <button
-                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm"
-              >
-                <span>Next</span>
-                <ChevronRight size={16} />
-              </button>
-            ) : (
-              <button
-                onClick={() => handleSubmit(false)}
-                disabled={submitting}
-                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70"
-              >
-                {submitting && <Loader2 size={16} className="animate-spin" />}
-                <span>Submit Exam</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
