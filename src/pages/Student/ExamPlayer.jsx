@@ -522,7 +522,7 @@ export default function ExamPlayer() {
       )}
 
       {/* Top bar */}
-      <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-100 shadow-sm z-10">
         <div className="max-w-7xl mx-auto px-6 py-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-4">
@@ -611,7 +611,7 @@ export default function ExamPlayer() {
       {/* Main content with sidebar */}
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Question navigation sidebar */}
-        <div className="w-56 bg-white border-r border-gray-100 p-3 overflow-y-auto">
+        <div className="w-72 bg-white border-r border-gray-100 p-3 overflow-y-auto">
           {/* Student credentials */}
           <div className="mb-4 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
@@ -673,7 +673,7 @@ export default function ExamPlayer() {
         </div>
 
         {/* Question body */}
-        <div className="flex-1 px-6 py-8 flex items-center justify-center">
+        <div className="flex-1 px-6 py-8">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 max-w-2xl w-full">
             <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-3">
               Question {current + 1} of {questions.length}
