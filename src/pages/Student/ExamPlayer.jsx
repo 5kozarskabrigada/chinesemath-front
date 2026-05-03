@@ -23,6 +23,9 @@ export default function ExamPlayer() {
   const [examTerminated, setExamTerminated] = useState(false);
   const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isFullscreenBlocked, setIsFullscreenBlocked] = useState(false);
+  const [fullscreenViolationStartTime, setFullscreenViolationStartTime] = useState(null);
+  const [fullscreenViolationCount, setFullscreenViolationCount] = useState(0);
+  const [violationTimer, setViolationTimer] = useState(0);
   const cameraVideoRef = useRef(null);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
@@ -145,7 +148,37 @@ export default function ExamPlayer() {
               hasLoggedStartRef.current = true;
               
               // Enter fullscreen on new exam start
-              enterFullscreen();
+              const enterFullscreenInitial = async () => {
+                try {
+                  logEvent("fullscreen_initial_attempt", { timestamp: new Date().toISOString() });
+                  
+                  if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                  } else if (document.documentElement.webkitRequestFullscreen) {
+                    await document.documentElement.webkitRequestFullscreen();
+                  } else if (document.documentElement.msRequestFullscreen) {
+                    await document.documentElement.msRequestFullscreen();
+                  }
+                  
+                  logEvent("fullscreen_initial_success", { timestamp: new Date().toISOString() });
+                } catch (error) {
+                  console.error('Initial fullscreen request failed:', error);
+                  logEvent("fullscreen_initial_failed", { 
+                    timestamp: new Date().toISOString(),
+                    error: error.message
+                  });
+                  
+                  // Still allow exam to continue but show warning
+                  setTimeout(() => {
+                    if (!document.fullscreenElement) {
+                      setIsFullscreenBlocked(true);
+                      alert('Please enter fullscreen mode manually using F11 or the fullscreen button to ensure exam security.');
+                    }
+                  }, 2000);
+                }
+              };
+              
+              enterFullscreenInitial();
               
               // Add event listeners for security
               document.addEventListener('contextmenu', preventContextMenu);
@@ -213,33 +246,62 @@ export default function ExamPlayer() {
   // Fullscreen detection and prevention
   useEffect(() => {
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        logEvent("fullscreen_exit_violation", { timestamp: new Date().toISOString() });
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        const violationTime = Date.now();
+        setFullscreenViolationStartTime(violationTime);
+        setFullscreenViolationCount(prev => prev + 1);
+        
+        logEvent("fullscreen_exit_violation", { 
+          timestamp: new Date().toISOString(),
+          method: 'exit_detected',
+          violationCount: fullscreenViolationCount + 1,
+          violationTime
+        });
         setIsFullscreenBlocked(true);
-        // Force fullscreen back
-        const enterFullscreen = async () => {
-          try {
-            if (document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen();
-            } else if (document.documentElement.webkitRequestFullscreen) {
-              await document.documentElement.webkitRequestFullscreen();
-            } else if (document.documentElement.msRequestFullscreen) {
-              await document.documentElement.msRequestFullscreen();
-            }
-          } catch (error) {
-            console.warn('Fullscreen re-entry failed:', error);
-          }
-        };
-        enterFullscreen();
+        
+        // Show warning and require manual re-entry for better user awareness
+        console.warn('Fullscreen mode exited - exam paused');
       } else {
-        logEvent("fullscreen_enter");
+        // Calculate time spent outside fullscreen if there was a violation
+        if (fullscreenViolationStartTime) {
+          const timeOutsideFullscreen = Date.now() - fullscreenViolationStartTime;
+          logEvent("fullscreen_enter", { 
+            timestamp: new Date().toISOString(),
+            timeOutsideMs: timeOutsideFullscreen,
+            violationCount: fullscreenViolationCount
+          });
+          setFullscreenViolationStartTime(null);
+        } else {
+          logEvent("fullscreen_enter", { timestamp: new Date().toISOString() });
+        }
         setIsFullscreenBlocked(false);
       }
     };
 
+    // Handle multiple vendor prefixes for better browser compatibility
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, [logEvent]);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("msfullscreenchange", handleFullscreenChange);
+    };
+  }, [logEvent, fullscreenViolationStartTime, fullscreenViolationCount]);
+
+  // Update violation timer every second when in violation
+  useEffect(() => {
+    if (fullscreenViolationStartTime && isFullscreenBlocked) {
+      const timer = setInterval(() => {
+        setViolationTimer(Math.floor((Date.now() - fullscreenViolationStartTime) / 1000));
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    } else {
+      setViolationTimer(0);
+    }
+  }, [fullscreenViolationStartTime, isFullscreenBlocked]);
 
   // ESC key detection as violation
   useEffect(() => {
@@ -494,14 +556,51 @@ export default function ExamPlayer() {
     <div className={`min-h-screen bg-gray-50 flex flex-col ${isFullscreenBlocked ? 'blur-sm pointer-events-none' : ''}`}>
       {/* Fullscreen blocking overlay */}
       {isFullscreenBlocked && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center pointer-events-auto">
-          <div className="bg-white rounded-2xl p-8 text-center max-w-md shadow-2xl">
-            <AlertTriangle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
-            <p className="text-gray-600 mb-6">You must be in fullscreen mode to continue the exam. Please click below to re-enter fullscreen.</p>
+        <div className="fixed inset-0 bg-red-900/90 backdrop-blur-md z-50 flex items-center justify-center pointer-events-auto">
+          <div className="bg-white rounded-2xl p-8 text-center max-w-md shadow-2xl border-4 border-red-500 animate-pulse">
+            <div className="animate-bounce mb-4">
+              <AlertTriangle className="w-20 h-20 text-red-600 mx-auto" />
+            </div>
+            <h2 className="text-3xl font-bold text-red-900 mb-2">⚠️ EXAM PAUSED ⚠️</h2>
+            
+            {fullscreenViolationCount > 0 && (
+              <div className="bg-red-100 border border-red-400 rounded-lg p-2 mb-4">
+                <p className="text-red-800 font-bold text-sm">
+                  Violation #{fullscreenViolationCount} - All attempts are logged
+                </p>
+              </div>
+            )}
+            
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+              <p className="text-red-800 font-semibold text-lg">Fullscreen Mode Required</p>
+              <p className="text-red-700 text-sm mt-2">
+                Exiting fullscreen mode is not allowed during the exam. 
+                This violation has been logged and reported to your administrator.
+              </p>
+            </div>
+            
+            {fullscreenViolationCount >= 3 && (
+              <div className="bg-orange-100 border border-orange-400 rounded-lg p-3 mb-4">
+                <p className="text-orange-800 font-bold text-sm">
+                  ⚠️ WARNING: Multiple violations detected!
+                </p>
+                <p className="text-orange-700 text-xs mt-1">
+                  Continued violations may result in exam termination.
+                </p>
+              </div>
+            )}
+            
+            <p className="text-gray-600 mb-6 font-medium">
+              You must return to fullscreen mode to continue with your exam.
+            </p>
             <button
               onClick={async () => {
                 try {
+                  logEvent("fullscreen_manual_reentry_attempt", { 
+                    timestamp: new Date().toISOString(),
+                    violationCount: fullscreenViolationCount
+                  });
+                  
                   if (document.documentElement.requestFullscreen) {
                     await document.documentElement.requestFullscreen();
                   } else if (document.documentElement.webkitRequestFullscreen) {
@@ -509,14 +608,36 @@ export default function ExamPlayer() {
                   } else if (document.documentElement.msRequestFullscreen) {
                     await document.documentElement.msRequestFullscreen();
                   }
+                  
+                  logEvent("fullscreen_manual_reentry_success", { 
+                    timestamp: new Date().toISOString(),
+                    violationCount: fullscreenViolationCount
+                  });
                 } catch (error) {
                   console.error('Fullscreen request failed:', error);
+                  logEvent("fullscreen_manual_reentry_failed", { 
+                    timestamp: new Date().toISOString(),
+                    error: error.message,
+                    violationCount: fullscreenViolationCount
+                  });
+                  
+                  // Show additional help if fullscreen fails
+                  alert('Fullscreen request failed. Please try pressing F11 or contact your administrator for help.');
                 }
               }}
-              className="bg-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-700 transition"
+              className="bg-red-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-red-700 transition transform hover:scale-105 shadow-lg"
             >
-              Enter Fullscreen
+              🔒 RETURN TO FULLSCREEN
             </button>
+            <div className="mt-4 text-xs text-gray-500">
+              <p>Time spent outside fullscreen is being tracked</p>
+              <p>Press F11 if the button doesn't work</p>
+              {violationTimer > 0 && (
+                <p className="text-red-600 font-bold mt-2 text-base animate-pulse">
+                  ⏱️ Violation Duration: {violationTimer}s
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
