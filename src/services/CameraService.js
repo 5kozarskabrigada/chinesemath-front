@@ -6,6 +6,13 @@ class CameraService {
     this.laptopStream = null;
     this.phoneStream = null;
     this.socket = null;
+    this.microphoneStream = null;
+    this.proctorAudioStream = null;
+    this.audioContext = null;
+    this.isMicrophoneMuted = false;
+    this.isProctorSpeaking = false;
+    this.hasCallRequest = false;
+    this.callRequestTime = null;
 
     this.peerId = null;
     this.isConnected = false;
@@ -13,7 +20,11 @@ class CameraService {
       onLaptopCameraReady: null,
       onPhoneCameraReady: null,
       onConnectionStatus: null,
-      onError: null
+      onError: null,
+      onMicrophoneReady: null,
+      onAudioStatusChange: null,
+      onCallRequest: null,
+      onProctorCall: null
     };
   }
 
@@ -83,6 +94,38 @@ class CameraService {
       this.socket.on('exam_terminated', () => {
         this.cleanup();
         window.location.href = '/student/dashboard';
+      });
+
+      // Audio communication events
+      this.socket.on('proctor_audio_start', (data) => {
+        console.log('Proctor started speaking');
+        this.isProctorSpeaking = true;
+        this.callbacks.onProctorCall?.(true);
+        this.callbacks.onAudioStatusChange?.({ proctorSpeaking: true });
+      });
+
+      this.socket.on('proctor_audio_stop', (data) => {
+        console.log('Proctor stopped speaking');
+        this.isProctorSpeaking = false;
+        this.callbacks.onProctorCall?.(false);
+        this.callbacks.onAudioStatusChange?.({ proctorSpeaking: false });
+      });
+
+      this.socket.on('microphone_toggle', (data) => {
+        console.log('Proctor toggled microphone:', data.muted);
+        this.setMicrophoneMuted(data.muted);
+        this.callbacks.onAudioStatusChange?.({ microphoneMuted: data.muted });
+      });
+
+      this.socket.on('call_request_response', (data) => {
+        console.log('Call request response:', data);
+        if (data.accepted) {
+          this.callbacks.onProctorCall?.(true, 'Call accepted by proctor');
+        } else {
+          this.callbacks.onProctorCall?.(false, 'Call dismissed by proctor');
+        }
+        this.hasCallRequest = false;
+        this.callRequestTime = null;
       });
 
       // Return true even if socket fails - exam can continue without monitoring
@@ -395,6 +438,137 @@ class CameraService {
     });
   }
 
+  // Initialize microphone for proctor communication
+  async initializeMicrophone() {
+    try {
+      this.checkCameraSupport();
+      
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      };
+
+      this.microphoneStream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.callbacks.onMicrophoneReady?.(this.microphoneStream);
+      
+      // Start streaming audio to admin if socket is ready
+      if (this.socket && this.isConnected) {
+        this.startAudioStreaming();
+      } else if (this.socket) {
+        this.socket.on('connect', () => {
+          this.startAudioStreaming();
+        });
+      }
+
+      return this.microphoneStream;
+    } catch (error) {
+      console.error('Microphone initialization failed:', error);
+      let errorMessage = 'Unable to access microphone.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Microphone permission denied. Please allow microphone access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      }
+      this.callbacks.onError?.(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Start streaming audio to proctor (when unmuted)
+  startAudioStreaming() {
+    if (!this.microphoneStream || !this.socket) return;
+
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = this.audioContext.createMediaStreamSource(this.microphoneStream);
+    const analyzer = this.audioContext.createAnalyser();
+    source.connect(analyzer);
+
+    const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+    
+    this.audioStreamingInterval = setInterval(() => {
+      if (!this.socket || !this.isConnected || this.isMicrophoneMuted) return;
+      
+      try {
+        analyzer.getByteFrequencyData(dataArray);
+        // Calculate audio level for voice detection
+        const audioLevel = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+        
+        // Only send audio data if there's significant sound (voice activity detection)
+        if (audioLevel > 20) {
+          this.socket.emit('student_audio_stream', {
+            audioLevel: audioLevel,
+            timestamp: Date.now()
+          });
+        }
+      } catch (e) {
+        console.warn('Audio streaming error:', e);
+      }
+    }, 100); // Send audio data every 100ms
+  }
+
+  // Set microphone muted state
+  setMicrophoneMuted(muted) {
+    this.isMicrophoneMuted = muted;
+    if (this.microphoneStream) {
+      const audioTracks = this.microphoneStream.getAudioTracks();
+      audioTracks.forEach(track => track.enabled = !muted);
+    }
+    this.callbacks.onAudioStatusChange?.({ microphoneMuted: muted });
+  }
+
+  // Request proctor assistance
+  requestProctorCall(message = 'Student requesting assistance') {
+    if (!this.socket) return false;
+    
+    if (this.hasCallRequest) {
+      console.warn('Call request already pending');
+      return false;
+    }
+    
+    this.hasCallRequest = true;
+    this.callRequestTime = Date.now();
+    
+    this.socket.emit('call_request', {
+      message: message,
+      timestamp: this.callRequestTime
+    });
+    
+    this.callbacks.onCallRequest?.(true, message);
+    return true;
+  }
+
+  // Cancel call request
+  cancelCallRequest() {
+    if (!this.socket || !this.hasCallRequest) return false;
+    
+    this.socket.emit('cancel_call_request', {
+      timestamp: Date.now()
+    });
+    
+    this.hasCallRequest = false;
+    this.callRequestTime = null;
+    this.callbacks.onCallRequest?.(false);
+    return true;
+  }
+
+  // Send audio status to proctor
+  sendAudioStatus() {
+    if (!this.socket) return;
+
+    const status = {
+      microphoneActive: !!this.microphoneStream,
+      microphoneMuted: this.isMicrophoneMuted,
+      proctorSpeaking: this.isProctorSpeaking,
+      callRequestPending: this.hasCallRequest,
+      timestamp: Date.now()
+    };
+
+    this.socket.emit('audio_status', status);
+  }
+
   // Set event callbacks
   setCallbacks(callbacks) {
     this.callbacks = { ...this.callbacks, ...callbacks };
@@ -422,6 +596,16 @@ class CameraService {
       this.phoneVideoEl = null;
     }
 
+    if (this.audioStreamingInterval) {
+      clearInterval(this.audioStreamingInterval);
+      this.audioStreamingInterval = null;
+    }
+
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
     if (this.laptopStream) {
       this.laptopStream.getTracks().forEach(track => track.stop());
       this.laptopStream = null;
@@ -432,12 +616,19 @@ class CameraService {
       this.phoneStream = null;
     }
 
+    if (this.microphoneStream) {
+      this.microphoneStream.getTracks().forEach(track => track.stop());
+      this.microphoneStream = null;
+    }
+
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
 
     this.isConnected = false;
+    this.hasCallRequest = false;
+    this.callRequestTime = null;
   }
 }
 

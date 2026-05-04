@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../authContext";
 import { apiGetExamQuestions, apiSubmitExam, apiLogExamEvent, apiCheckExamStatus } from "../../api";
 import { renderMath } from "../../utils/math";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize, Star } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, X, AlertTriangle, Smartphone, Maximize, Star, Mic, MicOff, Phone, PhoneCall } from "lucide-react";
 import CameraService from "../../services/CameraService";
 import QRCode from "react-qr-code";
 
@@ -26,6 +26,14 @@ export default function ExamPlayer() {
   const [fullscreenViolationStartTime, setFullscreenViolationStartTime] = useState(null);
   const [fullscreenViolationCount, setFullscreenViolationCount] = useState(0);
   const [violationTimer, setViolationTimer] = useState(0);
+  
+  // Audio communication state
+  const [microphoneActive, setMicrophoneActive] = useState(false);
+  const [microphoneMuted, setMicrophoneMuted] = useState(false);
+  const [proctorSpeaking, setProctorSpeaking] = useState(false);
+  const [callRequestPending, setCallRequestPending] = useState(false);
+  const [callStatus, setCallStatus] = useState('');
+  
   const cameraVideoRef = useRef(null);
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
@@ -189,6 +197,44 @@ export default function ExamPlayer() {
             try {
               await CameraService.initializeSocket(examId, user?.id || 'unknown');
               await CameraService.initializeLaptopCamera();
+
+              // Initialize microphone for proctor communication
+              try {
+                await CameraService.initializeMicrophone();
+                setMicrophoneActive(true);
+                logEvent("microphone_initialized", { timestamp: new Date().toISOString() });
+              } catch (micError) {
+                console.warn('Microphone initialization failed:', micError);
+                setMicrophoneActive(false);
+                // Continue exam without microphone - it's not critical
+              }
+
+              // Set up audio communication callbacks
+              CameraService.setCallbacks({
+                onAudioStatusChange: (status) => {
+                  if (status.microphoneMuted !== undefined) {
+                    setMicrophoneMuted(status.microphoneMuted);
+                  }
+                  if (status.proctorSpeaking !== undefined) {
+                    setProctorSpeaking(status.proctorSpeaking);
+                  }
+                },
+                onCallRequest: (pending, message) => {
+                  setCallRequestPending(pending);
+                  if (pending) {
+                    setCallStatus('Call request sent...');
+                  } else {
+                    setCallStatus('');
+                  }
+                },
+                onProctorCall: (active, message) => {
+                  if (active) {
+                    setCallStatus(message || 'Proctor is speaking');
+                  } else {
+                    setCallStatus('');
+                  }
+                }
+              });
 
               // Start camera health check to send status updates to admin
               CameraService.startCameraHealthCheck();
@@ -490,6 +536,27 @@ export default function ExamPlayer() {
     setCurrent(index);
   };
 
+  // Audio communication functions
+  const handleCallRequest = () => {
+    if (callRequestPending) {
+      // Cancel existing request
+      CameraService.cancelCallRequest();
+      setCallRequestPending(false);
+      setCallStatus('');
+      logEvent("call_request_cancelled", { timestamp: new Date().toISOString() });
+    } else {
+      // Send new request
+      const success = CameraService.requestProctorCall('Student requesting assistance');
+      if (success) {
+        setCallRequestPending(true);
+        setCallStatus('Requesting proctor assistance...');
+        logEvent("call_request_sent", { timestamp: new Date().toISOString() });
+      } else {
+        alert('Unable to send call request. Please try again.');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -656,12 +723,56 @@ export default function ExamPlayer() {
               >
                 <Star size={18} className={markedForReview.has(questions[current]?.id) ? 'fill-current' : ''} />
               </button>
+              
+              {/* Audio status indicators */}
+              <div className="flex items-center gap-2">
+                {microphoneActive && (
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
+                    microphoneMuted ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                  }`} title={microphoneMuted ? 'Microphone muted by proctor' : 'Microphone active'}>
+                    {microphoneMuted ? <MicOff size={12} /> : <Mic size={12} />}
+                  </div>
+                )}
+                
+                {proctorSpeaking && (
+                  <div className="bg-blue-100 text-blue-600 px-2 py-1 rounded-lg text-xs animate-pulse">
+                    <div className="flex items-center gap-1">
+                      <PhoneCall size={12} />
+                      <span>Proctor speaking</span>
+                    </div>
+                  </div>
+                )}
+                
+                {callStatus && (
+                  <div className="bg-orange-100 text-orange-600 px-2 py-1 rounded-lg text-xs">
+                    {callStatus}
+                  </div>
+                )}
+              </div>
+              
               <p className="font-semibold text-gray-900 text-sm truncate max-w-xs">{exam?.title}</p>
               <p className="text-xs text-gray-400">{answered}/{questions.length} answered</p>
             </div>
-            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
-              <Clock size={14} />
-              <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+            
+            <div className="flex items-center gap-3">
+              {/* Call request button */}
+              <button
+                onClick={handleCallRequest}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  callRequestPending 
+                    ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' 
+                    : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                }`}
+                title={callRequestPending ? 'Cancel call request' : 'Request proctor assistance'}
+              >
+                <Phone size={12} />
+                <span>{callRequestPending ? 'Cancel Call' : 'Call Proctor'}</span>
+              </button>
+              
+              <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-sm font-mono font-bold ${isTimeLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-700"}`}>
+                <Clock size={14} />
+                <span>{timeLeft !== null ? formatTime(timeLeft) : "--:--"}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center justify-between border-t border-gray-100 pt-3">

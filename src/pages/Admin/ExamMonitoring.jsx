@@ -19,7 +19,12 @@ import {
   XCircle,
   UserCheck,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Mic,
+  MicOff,
+  Phone,
+  PhoneCall,
+  PhoneIncoming
 } from "lucide-react";
 import io from 'socket.io-client';
 import { apiGetAdminExams, apiGetMonitoringEvents } from "../../api";
@@ -41,6 +46,13 @@ export default function ExamMonitoring({ examId: examIdProp }) {
   const selectedStudentRef = useRef(null);
   const [activeExams, setActiveExams] = useState([]);
   const [loadingExams, setLoadingExams] = useState(false);
+  const [viewMode, setViewMode] = useState('single');
+  const [studentFrames, setStudentFrames] = useState({});
+  
+  // Audio communication state
+  const [callRequests, setCallRequests] = useState([]);
+  const [audioStatus, setAudioStatus] = useState({});
+  const [isProctorSpeaking, setIsProctorSpeaking] = useState(false);
 
   // Keep ref in sync with state so socket handlers see latest value
   useEffect(() => {
@@ -204,15 +216,27 @@ export default function ExamMonitoring({ examId: examIdProp }) {
 
         // Laptop camera snapshot — data.data is a base64 JPEG data URL
         socketRef.current.on('student_camera_stream', (data) => {
-          if (selectedStudentRef.current?.id === data.studentId && data.data) {
-            setLaptopFrame(data.data);
+          if (data.data) {
+            setStudentFrames(prev => ({
+              ...prev,
+              [data.studentId]: { ...prev[data.studentId], laptop: data.data }
+            }));
+            if (selectedStudentRef.current?.id === data.studentId) {
+              setLaptopFrame(data.data);
+            }
           }
         });
 
         // Phone camera snapshot — data.data is a base64 JPEG data URL
         socketRef.current.on('student_phone_camera_stream', (data) => {
-          if (selectedStudentRef.current?.id === data.studentId && data.data) {
-            setPhoneFrame(data.data);
+          if (data.data) {
+            setStudentFrames(prev => ({
+              ...prev,
+              [data.studentId]: { ...prev[data.studentId], phone: data.data }
+            }));
+            if (selectedStudentRef.current?.id === data.studentId) {
+              setPhoneFrame(data.data);
+            }
           }
         });
 
@@ -225,6 +249,58 @@ export default function ExamMonitoring({ examId: examIdProp }) {
             message: `${data.violationType} (severity: ${data.severity})`,
             timestamp: new Date()
           }]);
+        });
+
+        // Audio communication events
+        socketRef.current.on('student_audio_stream', (data) => {
+          // Update audio status for the student
+          setAudioStatus(prev => ({
+            ...prev,
+            [data.studentId]: {
+              ...prev[data.studentId],
+              audioLevel: data.audioLevel,
+              lastAudioTime: data.timestamp
+            }
+          }));
+        });
+
+        socketRef.current.on('audio_status', (data) => {
+          setAudioStatus(prev => ({
+            ...prev,
+            [data.studentId]: {
+              ...prev[data.studentId],
+              microphoneActive: data.microphoneActive,
+              microphoneMuted: data.microphoneMuted,
+              proctorSpeaking: data.proctorSpeaking,
+              callRequestPending: data.callRequestPending
+            }
+          }));
+        });
+
+        // Call request events
+        socketRef.current.on('call_request', (data) => {
+          console.log('Call request received:', data);
+          setCallRequests(prev => [...prev, {
+            id: Date.now(),
+            studentId: data.studentId,
+            socketId: data.socketId,
+            message: data.message,
+            timestamp: new Date(data.timestamp)
+          }]);
+          
+          // Add to alerts as well
+          setAlerts(prev => [...prev, {
+            id: Date.now(),
+            type: 'call_request',
+            studentId: data.studentId,
+            message: `Call request: ${data.message}`,
+            timestamp: new Date()
+          }]);
+        });
+
+        socketRef.current.on('call_request_cancelled', (data) => {
+          console.log('Call request cancelled:', data);
+          setCallRequests(prev => prev.filter(req => req.studentId !== data.studentId));
         });
 
       } catch (error) {
@@ -280,6 +356,59 @@ export default function ExamMonitoring({ examId: examIdProp }) {
     }
   };
 
+  // Audio communication functions
+  const toggleStudentMicrophone = (studentId, currentlyMuted) => {
+    if (socketRef.current) {
+      const newMutedState = !currentlyMuted;
+      socketRef.current.emit('admin_toggle_microphone', { 
+        targetStudentId: studentId, 
+        muted: newMutedState 
+      });
+      
+      // Update local state
+      setAudioStatus(prev => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          microphoneMuted: newMutedState
+        }
+      }));
+    }
+  };
+
+  const startProctorSpeaking = (studentId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('admin_start_audio', { targetStudentId: studentId });
+      setIsProctorSpeaking(true);
+    }
+  };
+
+  const stopProctorSpeaking = (studentId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('admin_stop_audio', { targetStudentId: studentId });
+      setIsProctorSpeaking(false);
+    }
+  };
+
+  const respondToCall = (callRequest, accepted) => {
+    if (socketRef.current) {
+      socketRef.current.emit('admin_respond_call', {
+        targetStudentId: callRequest.studentId,
+        accepted: accepted,
+        message: accepted ? 'Proctor is available to assist' : 'Call request dismissed'
+      });
+      
+      // Remove from call requests
+      setCallRequests(prev => prev.filter(req => req.id !== callRequest.id));
+      
+      // If accepted, start speaking to that student
+      if (accepted) {
+        setSelectedStudent(students.find(s => s.id === callRequest.studentId));
+        startProctorSpeaking(callRequest.studentId);
+      }
+    }
+  };
+
   const dismissAlert = (alertId) => {
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
@@ -289,6 +418,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
       case 'disconnect': return <WifiOff className="w-5 h-5 text-red-500" />;
       case 'camera_error': return <Camera className="w-5 h-5 text-yellow-500" />;
       case 'violation': return <AlertTriangle className="w-5 h-5 text-red-500" />;
+      case 'call_request': return <PhoneIncoming className="w-5 h-5 text-blue-500" />;
       default: return <AlertTriangle className="w-5 h-5 text-gray-500" />;
     }
   };
@@ -369,6 +499,13 @@ export default function ExamMonitoring({ examId: examIdProp }) {
             <span className="text-sm text-gray-500">
               {students.filter(s => s.connected).length} / {students.length} students online
             </span>
+            <button
+              onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition flex items-center gap-2"
+            >
+              {viewMode === 'single' ? <Users className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+              {viewMode === 'single' ? 'Grid View' : 'Single View'}
+            </button>
           </div>
         </div>
 
@@ -415,6 +552,26 @@ export default function ExamMonitoring({ examId: examIdProp }) {
                           Phone
                         </span>
                       </div>
+                      
+                      {audioStatus[student.id]?.microphoneActive && (
+                        <div className="flex items-center gap-1">
+                          {audioStatus[student.id]?.microphoneMuted ? (
+                            <MicOff className="w-3 h-3 text-red-500" />
+                          ) : (
+                            <Mic className="w-3 h-3 text-green-500" />
+                          )}
+                          <span className={audioStatus[student.id]?.microphoneMuted ? 'text-red-600' : 'text-green-600'}>
+                            Mic
+                          </span>
+                        </div>
+                      )}
+                      
+                      {callRequests.some(req => req.studentId === student.id) && (
+                        <div className="flex items-center gap-1">
+                          <PhoneIncoming className="w-3 h-3 text-blue-500 animate-pulse" />
+                          <span className="text-blue-600 font-medium">Call</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -452,11 +609,125 @@ export default function ExamMonitoring({ examId: examIdProp }) {
                 )}
               </div>
             </div>
+
+            {/* Call Requests */}
+            {callRequests.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl shadow-lg p-6 mt-6">
+                <h2 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
+                  <PhoneIncoming className="w-5 h-5" />
+                  Call Requests ({callRequests.length})
+                </h2>
+                
+                <div className="space-y-3">
+                  {callRequests.map(callRequest => (
+                    <div key={callRequest.id} className="bg-white rounded-lg border border-blue-200 p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-medium text-blue-900">
+                            {students.find(s => s.id === callRequest.studentId)?.name || `Student ${callRequest.studentId.slice(0, 8)}`}
+                          </p>
+                          <p className="text-sm text-blue-700">{callRequest.message}</p>
+                          <p className="text-xs text-blue-600 mt-1">
+                            {callRequest.timestamp.toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => respondToCall(callRequest, true)}
+                          className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition"
+                        >
+                          <PhoneCall className="w-4 h-4" />
+                          Accept Call
+                        </button>
+                        <button
+                          onClick={() => respondToCall(callRequest, false)}
+                          className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Video Monitoring */}
           <div className="lg:col-span-3">
-            {selectedStudent ? (
+            {viewMode === 'grid' ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">All Students Camera Grid</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {students.filter(s => s.connected).map(student => {
+                      const frames = studentFrames[student.id] || {};
+                      return (
+                        <div key={student.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-medium text-gray-900 text-sm">
+                              {student.name || `Student ${student.id.slice(0, 8)}`}
+                            </h3>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => {
+                                  setSelectedStudent(student);
+                                  setViewMode('single');
+                                }}
+                                className="p-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+                                title="View Details"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => terminateExam(student.id)}
+                                className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                                title="Disqualify"
+                              >
+                                <XCircle className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="relative bg-gray-900 rounded overflow-hidden aspect-video">
+                              {frames.laptop ? (
+                                <img src={frames.laptop} alt={`${student.name} laptop`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                  <Monitor className="w-6 h-6 text-gray-600" />
+                                  <span className="text-gray-500 text-xs mt-1">No stream</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-1 left-1 bg-black/50 px-1.5 py-0.5 rounded text-xs text-white">Laptop</div>
+                            </div>
+                            <div className="relative bg-gray-900 rounded overflow-hidden aspect-video">
+                              {frames.phone ? (
+                                <img src={frames.phone} alt={`${student.name} phone`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                  <Smartphone className="w-6 h-6 text-gray-600" />
+                                  <span className="text-gray-500 text-xs mt-1">No stream</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-1 left-1 bg-black/50 px-1.5 py-0.5 rounded text-xs text-white">Phone</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {students.filter(s => s.connected).length === 0 && (
+                      <div className="col-span-full text-center py-8 text-gray-500">
+                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                        <p>No connected students</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : selectedStudent ? (
               <div className="space-y-6">
                 {/* Student Info & Controls */}
                 <div className="bg-white rounded-xl shadow-lg p-6">
@@ -471,6 +742,44 @@ export default function ExamMonitoring({ examId: examIdProp }) {
                     </div>
                     
                     <div className="flex gap-2">
+                      {/* Audio Controls */}
+                      {audioStatus[selectedStudent.id]?.microphoneActive && (
+                        <button
+                          onClick={() => toggleStudentMicrophone(
+                            selectedStudent.id, 
+                            audioStatus[selectedStudent.id]?.microphoneMuted || false
+                          )}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+                            audioStatus[selectedStudent.id]?.microphoneMuted
+                              ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                              : 'bg-green-100 text-green-600 hover:bg-green-200'
+                          }`}
+                          title={audioStatus[selectedStudent.id]?.microphoneMuted ? 'Unmute microphone' : 'Mute microphone'}
+                        >
+                          {audioStatus[selectedStudent.id]?.microphoneMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                          {audioStatus[selectedStudent.id]?.microphoneMuted ? 'Unmute' : 'Mute'}
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => {
+                          if (isProctorSpeaking) {
+                            stopProctorSpeaking(selectedStudent.id);
+                          } else {
+                            startProctorSpeaking(selectedStudent.id);
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+                          isProctorSpeaking
+                            ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                        }`}
+                        title={isProctorSpeaking ? 'Stop speaking' : 'Speak to student'}
+                      >
+                        {isProctorSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                        {isProctorSpeaking ? 'Stop Talk' : 'Talk'}
+                      </button>
+                      
                       <button
                         onClick={() => requestCameraCheck(selectedStudent.id)}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition flex items-center gap-2"
