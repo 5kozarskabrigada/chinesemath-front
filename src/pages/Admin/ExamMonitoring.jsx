@@ -53,6 +53,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
   const [callRequests, setCallRequests] = useState([]);
   const [audioStatus, setAudioStatus] = useState({});
   const [isProctorSpeaking, setIsProctorSpeaking] = useState(false);
+  const audioElementsRef = useRef({});
 
   // Keep ref in sync with state so socket handlers see latest value
   useEffect(() => {
@@ -253,35 +254,28 @@ export default function ExamMonitoring({ examId: examIdProp }) {
 
         // Audio communication events
         socketRef.current.on('student_audio_stream', (data) => {
+          console.log('Student audio stream received:', data.studentId);
           // Update audio status for the student
           setAudioStatus(prev => ({
             ...prev,
             [data.studentId]: {
               ...prev[data.studentId],
               audioLevel: data.audioLevel,
-              lastAudioTime: data.timestamp
+              lastUpdate: Date.now()
             }
           }));
-        });
 
-        socketRef.current.on('audio_status', (data) => {
-          setAudioStatus(prev => ({
-            ...prev,
-            [data.studentId]: {
-              ...prev[data.studentId],
-              microphoneActive: data.microphoneActive,
-              microphoneMuted: data.microphoneMuted,
-              proctorSpeaking: data.proctorSpeaking,
-              callRequestPending: data.callRequestPending
-            }
-          }));
+          // Play audio if audioData is present
+          if (data.audioData && selectedStudent?.id === data.studentId) {
+            playStudentAudio(data.studentId, data.audioData);
+          }
         });
 
         // Call request events
         socketRef.current.on('call_request', (data) => {
           console.log('Call request received:', data);
           setCallRequests(prev => [...prev, {
-            id: Date.now(),
+            id: Date.now() + Math.random(),
             studentId: data.studentId,
             socketId: data.socketId,
             message: data.message,
@@ -290,7 +284,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
           
           // Add to alerts as well
           setAlerts(prev => [...prev, {
-            id: Date.now(),
+            id: Date.now() + Math.random(),
             type: 'call_request',
             studentId: data.studentId,
             message: `Call request: ${data.message}`,
@@ -411,6 +405,36 @@ export default function ExamMonitoring({ examId: examIdProp }) {
 
   const dismissAlert = (alertId) => {
     setAlerts(prev => prev.filter(a => a.id !== alertId));
+  };
+
+  // Play student audio from base64 data
+  const playStudentAudio = (studentId, base64Audio) => {
+    try {
+      // Create or get audio element for this student
+      let audio = audioElementsRef.current[studentId];
+      
+      if (!audio) {
+        audio = new Audio();
+        audioElementsRef.current[studentId] = audio;
+      }
+      
+      // Stop any currently playing audio
+      audio.pause();
+      audio.currentTime = 0;
+      
+      // Set the new audio source
+      audio.src = base64Audio;
+      audio.play().catch(err => {
+        console.warn('Failed to play audio:', err);
+      });
+      
+      // Clean up after audio finishes
+      audio.onended = () => {
+        // Keep the audio element for reuse
+      };
+    } catch (error) {
+      console.error('Error playing student audio:', error);
+    }
   };
 
   const getAlertIcon = (type) => {

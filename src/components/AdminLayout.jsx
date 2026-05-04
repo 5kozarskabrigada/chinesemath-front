@@ -14,6 +14,7 @@ import {
   Trash2,
   Monitor,
   Video,
+  DollarSign,
 } from "lucide-react";
 
 // Navigation items for admin sidebar
@@ -27,6 +28,7 @@ const navItems = [
   { to: "/admin/exam-sessions", label: "Exam Sessions", icon: Video },
   { to: "/admin/logs", label: "Activity Logs", icon: Activity },
   { to: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2 },
+  { to: "/admin/usage", label: "Usage & Costs", icon: DollarSign },
 ];
 
 export default function AdminLayout({ children }) {

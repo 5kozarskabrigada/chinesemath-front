@@ -208,3 +208,21 @@ export async function apiRestoreRecycleBinItem(type, id) {
 export async function apiPermanentlyDeleteRecycleBinItem(type, id) {
   return request(`/api/admin/recycle-bin/${type}/${id}`, { method: "DELETE" });
 }
+
+// ─── Admin: Usage & Cost Tracking ───────────────────────────────────────────────
+
+export async function apiGetPerStudentUsage(from, to) {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return request(`/api/admin/usage/per-student${qs ? `?${qs}` : ""}`);
+}
+
+export async function apiGetUsageSummary(from, to) {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return request(`/api/admin/usage/summary${qs ? `?${qs}` : ""}`);
+}

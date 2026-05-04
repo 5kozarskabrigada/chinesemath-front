@@ -481,32 +481,62 @@ class CameraService {
   startAudioStreaming() {
     if (!this.microphoneStream || !this.socket) return;
 
-    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = this.audioContext.createMediaStreamSource(this.microphoneStream);
-    const analyzer = this.audioContext.createAnalyser();
-    source.connect(analyzer);
+    // Use MediaRecorder to capture actual audio data
+    try {
+      const mediaRecorder = new MediaRecorder(this.microphoneStream, {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 16000
+      });
 
-    const dataArray = new Uint8Array(analyzer.frequencyBinCount);
-    
-    this.audioStreamingInterval = setInterval(() => {
-      if (!this.socket || !this.isConnected || this.isMicrophoneMuted) return;
-      
-      try {
-        analyzer.getByteFrequencyData(dataArray);
-        // Calculate audio level for voice detection
-        const audioLevel = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+      this.mediaRecorder = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (!this.socket || !this.isConnected || this.isMicrophoneMuted) return;
         
-        // Only send audio data if there's significant sound (voice activity detection)
-        if (audioLevel > 20) {
-          this.socket.emit('student_audio_stream', {
-            audioLevel: audioLevel,
-            timestamp: Date.now()
-          });
+        if (event.data.size > 0) {
+          // Convert audio chunk to base64
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result;
+            this.socket.emit('student_audio_stream', {
+              audioData: base64Audio,
+              timestamp: Date.now()
+            });
+          };
+          reader.readAsDataURL(event.data);
         }
-      } catch (e) {
-        console.warn('Audio streaming error:', e);
-      }
-    }, 100); // Send audio data every 100ms
+      };
+
+      mediaRecorder.start(100); // Send chunks every 100ms
+      console.log('Audio streaming started with MediaRecorder');
+    } catch (error) {
+      console.error('Failed to start MediaRecorder, falling back to audio level detection:', error);
+      // Fallback to audio level detection
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = this.audioContext.createMediaStreamSource(this.microphoneStream);
+      const analyzer = this.audioContext.createAnalyser();
+      source.connect(analyzer);
+
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+      
+      this.audioStreamingInterval = setInterval(() => {
+        if (!this.socket || !this.isConnected || this.isMicrophoneMuted) return;
+        
+        try {
+          analyzer.getByteFrequencyData(dataArray);
+          const audioLevel = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+          
+          if (audioLevel > 20) {
+            this.socket.emit('student_audio_stream', {
+              audioLevel: audioLevel,
+              timestamp: Date.now()
+            });
+          }
+        } catch (e) {
+          console.warn('Audio streaming error:', e);
+        }
+      }, 100);
+    }
   }
 
   // Set microphone muted state
@@ -531,6 +561,7 @@ class CameraService {
     this.hasCallRequest = true;
     this.callRequestTime = Date.now();
     
+    console.log('Emitting call_request to server');
     this.socket.emit('call_request', {
       message: message,
       timestamp: this.callRequestTime
@@ -599,6 +630,11 @@ class CameraService {
     if (this.audioStreamingInterval) {
       clearInterval(this.audioStreamingInterval);
       this.audioStreamingInterval = null;
+    }
+
+    if (this.mediaRecorder) {
+      this.mediaRecorder.stop();
+      this.mediaRecorder = null;
     }
 
     if (this.audioContext) {
