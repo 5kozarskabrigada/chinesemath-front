@@ -38,6 +38,7 @@ export default function ExamPlayer() {
   const startTimeRef = useRef(Date.now());
   const hasLoggedStartRef = useRef(false);
   const examStartTimeRef = useRef(null);
+  const isSubmittingRef = useRef(false); // Ref-based guard for immediate synchronous check
 
   // Camera stream attachment
   useEffect(() => {
@@ -482,7 +483,12 @@ export default function ExamPlayer() {
 
   const handleSubmit = useCallback(
     async (autoSubmit = false) => {
-      if (submitting) return;
+      // Use ref for immediate synchronous check to prevent race conditions
+      if (isSubmittingRef.current || submitting) {
+        console.warn('Submission already in progress, ignoring duplicate request');
+        return;
+      }
+      
       if (!autoSubmit) {
         const unanswered = questions.filter((q) => !answers[q.id]).length;
         if (unanswered > 0) {
@@ -490,25 +496,52 @@ export default function ExamPlayer() {
           if (!confirmed) return;
         }
       }
+      
+      // Set both ref (immediate) and state (for UI updates)
+      isSubmittingRef.current = true;
       setSubmitting(true);
+      
       try {
-        const timeSpent = examStartTimeRef.current ? Math.floor((Date.now() - examStartTimeRef.current) / 1000) : Math.floor((Date.now() - startTimeRef.current) / 1000);
-        await apiSubmitExam(examId, answers, timeSpent);
+        const timeSpent = examStartTimeRef.current 
+          ? Math.floor((Date.now() - examStartTimeRef.current) / 1000) 
+          : Math.floor((Date.now() - startTimeRef.current) / 1000);
+        
+        console.log('Submitting exam...', { examId, answerCount: Object.keys(answers).length, timeSpent });
+        
+        const result = await apiSubmitExam(examId, answers, timeSpent);
+        
+        console.log('Exam submitted successfully:', result);
+        
         logEvent("exam_submitted", {
           answerCount: Object.keys(answers).length,
           totalQuestions: questions.length,
           timeSpent,
-          autoSubmit
+          autoSubmit,
+          submissionId: result.submissionId
         });
+        
         // Cleanup localStorage
         localStorage.removeItem(`exam_${examId}_state`);
         localStorage.removeItem(`exam_${examId}_start_time`);
         CameraService.cleanup();
+        
+        // Navigate to result page
         navigate(`/student/exam/${examId}/result`);
       } catch (error) {
-        setError(error.message);
-      } finally {
+        console.error('Submission error:', error);
+        isSubmittingRef.current = false; // Reset ref on error so user can retry
         setSubmitting(false);
+        
+        // Show detailed error message
+        const errorMsg = error.message || 'Failed to submit exam';
+        setError(errorMsg + ' - Please try again or contact your administrator.');
+        
+        // Log the error
+        logEvent("exam_submission_error", {
+          error: errorMsg,
+          answerCount: Object.keys(answers).length,
+          timestamp: new Date().toISOString()
+        });
       }
     },
     [answers, examId, navigate, questions, submitting, logEvent]
@@ -778,7 +811,7 @@ export default function ExamPlayer() {
           <div className="flex items-center justify-between border-t border-gray-100 pt-3">
             <button
               onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
+              disabled={current === 0 || submitting}
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               <ChevronLeft size={16} />
@@ -788,7 +821,8 @@ export default function ExamPlayer() {
             {current < questions.length - 1 ? (
               <button
                 onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm"
+                disabled={submitting}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Next</span>
                 <ChevronRight size={16} />
@@ -797,10 +831,10 @@ export default function ExamPlayer() {
               <button
                 onClick={() => handleSubmit(false)}
                 disabled={submitting}
-                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70"
+                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {submitting && <Loader2 size={16} className="animate-spin" />}
-                <span>Submit Exam</span>
+                <span>{submitting ? 'Submitting...' : 'Submit Exam'}</span>
               </button>
             )}
           </div>
@@ -836,6 +870,51 @@ export default function ExamPlayer() {
             >
               <X size={16} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Error Modal */}
+      {error && error.includes('submit') && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Submission Failed</h3>
+                <p className="text-sm text-gray-600">{error}</p>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-800">
+                <strong>Your answers are safe.</strong> They are saved locally. Click "Retry" to try submitting again.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setError('');
+                  isSubmittingRef.current = false;
+                  setSubmitting(false);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setError('');
+                  handleSubmit(false);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition font-semibold shadow-sm"
+              >
+                Retry Submission
+              </button>
+            </div>
           </div>
         </div>
       )}
