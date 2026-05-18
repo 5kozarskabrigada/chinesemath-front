@@ -60,6 +60,12 @@ class CameraService {
       // Store studentId for event filtering
       this.studentId = studentId;
       
+      // Initialize Audio Context for playing proctor audio
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      this.studentId = studentId;
+      
       // Use environment variable or fallback to same-origin
       const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
       
@@ -129,6 +135,33 @@ class CameraService {
         this.isProctorSpeaking = false;
         this.callbacks.onProctorCall?.(false);
         this.callbacks.onAudioStatusChange?.({ proctorSpeaking: false });
+      });
+
+      // Proctor audio stream - receive and play audio chunks
+      this.socket.on('proctor_audio_stream', async (data) => {
+        // Only respond if this message is for us
+        if (data.targetStudentId !== this.studentId) return;
+        
+        try {
+          if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          
+          // Convert base64 to blob
+          const response = await fetch(data.audioData);
+          const blob = await response.blob();
+          const arrayBuffer = await blob.arrayBuffer();
+          
+          // Decode and play
+          const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+          const source = this.audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(this.audioContext.destination);
+          source.start(0);
+        } catch (error) {
+          // Silently fail - audio chunks may be incomplete
+          console.debug('Proctor audio playback skipped:', error.message);
+        }
       });
 
       this.socket.on('microphone_toggle', (data) => {

@@ -375,14 +375,14 @@ export default function ExamMonitoring({ examId: examIdProp }) {
   const startProctorSpeaking = (studentId) => {
     if (socketRef.current) {
       socketRef.current.emit('admin_start_audio', { targetStudentId: studentId });
-      setIsProctorSpeaking(true);
+      startProctorMicrophone(studentId);
     }
   };
 
   const stopProctorSpeaking = (studentId) => {
     if (socketRef.current) {
       socketRef.current.emit('admin_stop_audio', { targetStudentId: studentId });
-      setIsProctorSpeaking(false);
+      stopProctorMicrophone();
     }
   };
 
@@ -409,19 +409,85 @@ export default function ExamMonitoring({ examId: examIdProp }) {
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
-  // Play student audio from base64 data using Web Audio API
-  const playStudentAudio = (studentId, base64Audio) => {
-    // For now, skip playing individual audio chunks as they come too fast
-    // and can't be played as individual Audio elements
-    // The audio streaming is working (we can see it in console)
-    // To actually hear the audio, we would need to implement Web Audio API
-    // with a proper audio buffer queue system
-    
-    // Just log that we received audio (remove this after testing)
-    // console.log('Audio chunk received for:', studentId);
-    
-    // TODO: Implement proper Web Audio API streaming if real-time audio monitoring is needed
-    // For now, the microphone indicators show that audio is being transmitted
+  // Audio Context for playback
+  const audioContextRef = useRef(null);
+  const proctorStreamRef = useRef(null);
+  const proctorRecorderRef = useRef(null);
+
+  // Initialize audio context
+  useEffect(() => {
+    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Play student audio from base64 data
+  const playStudentAudio = async (studentId, base64Audio) => {
+    try {
+      if (!audioContextRef.current) return;
+      
+      // Convert base64 to blob
+      const response = await fetch(base64Audio);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      // Decode and play
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.start(0);
+    } catch (error) {
+      // Silently fail - audio chunks may be incomplete or corrupted
+      console.debug('Audio playback skipped:', error.message);
+    }
+  };
+
+  // Start proctor microphone capture
+  const startProctorMicrophone = async (studentId) => {
+    try {
+      if (!proctorStreamRef.current) {
+        proctorStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      
+      const mediaRecorder = new MediaRecorder(proctorStreamRef.current, {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 16000
+      });
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && socketRef.current) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            socketRef.current.emit('proctor_audio_stream', {
+              targetStudentId: studentId,
+              audioData: reader.result,
+              timestamp: Date.now()
+            });
+          };
+          reader.readAsDataURL(event.data);
+        }
+      };
+      
+      mediaRecorder.start(100); // 100ms chunks
+      proctorRecorderRef.current = mediaRecorder;
+      setIsProctorSpeaking(true);
+    } catch (error) {
+      console.error('Failed to start proctor microphone:', error);
+      alert('Unable to access microphone. Please check permissions.');
+    }
+  };
+
+  // Stop proctor microphone
+  const stopProctorMicrophone = () => {
+    if (proctorRecorderRef.current) {
+      proctorRecorderRef.current.stop();
+      proctorRecorderRef.current = null;
+    }
+    setIsProctorSpeaking(false);
   };
 
   const getAlertIcon = (type) => {
