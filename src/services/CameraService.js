@@ -102,6 +102,11 @@ class CameraService {
 
       // Audio communication events
       this.socket.on('proctor_audio_start', (data) => {
+        console.log('[AUDIO DEBUG] proctor_audio_start received:', { 
+          targetStudentId: data.studentId, 
+          myStudentId: this.studentId,
+          match: data.studentId === this.studentId 
+        });
         // Only respond if this message is for us
         if (data.studentId !== this.studentId) return;
         
@@ -112,6 +117,11 @@ class CameraService {
       });
 
       this.socket.on('proctor_audio_stop', (data) => {
+        console.log('[AUDIO DEBUG] proctor_audio_stop received:', { 
+          targetStudentId: data.studentId, 
+          myStudentId: this.studentId,
+          match: data.studentId === this.studentId 
+        });
         // Only respond if this message is for us
         if (data.studentId !== this.studentId) return;
         
@@ -122,6 +132,11 @@ class CameraService {
       });
 
       this.socket.on('microphone_toggle', (data) => {
+        console.log('[AUDIO DEBUG] microphone_toggle received:', { 
+          targetStudentId: data.studentId, 
+          myStudentId: this.studentId,
+          match: data.studentId === this.studentId 
+        });
         // Only respond if this message is for us
         if (data.studentId !== this.studentId) return;
         
