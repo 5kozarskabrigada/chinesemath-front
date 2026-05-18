@@ -104,7 +104,24 @@ export default function ExamGettingReady() {
   // Enter fullscreen mode and monitor for exits
   useEffect(() => {
     // Enter fullscreen on mount
-    enterFullscreen();
+    const initialFullscreen = async () => {
+      await enterFullscreen();
+      // After initial attempt, check if we're actually in fullscreen
+      setTimeout(() => {
+        const isFullscreen = !!(
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.mozFullScreenElement ||
+          document.msFullscreenElement
+        );
+        if (!isFullscreen) {
+          // Not in fullscreen - show modal immediately
+          setShowFullscreenModal(true);
+        }
+      }, 500);
+    };
+    
+    initialFullscreen();
     
     // Monitor fullscreen changes
     const handleFullscreenChange = () => {
@@ -116,8 +133,11 @@ export default function ExamGettingReady() {
       );
       
       if (!isFullscreen) {
-        // Exited fullscreen - show modal
+        // Exited fullscreen - always show modal
         setShowFullscreenModal(true);
+      } else {
+        // Entered fullscreen - hide modal
+        setShowFullscreenModal(false);
       }
     };
     
@@ -246,6 +266,15 @@ export default function ExamGettingReady() {
         return;
       }
 
+      // Initialize microphone for proctor communication
+      try {
+        await CameraService.initializeMicrophone();
+        console.log('Microphone initialized successfully');
+      } catch (micError) {
+        console.warn('Microphone initialization failed:', micError);
+        // Don't block exam if microphone fails - it's optional
+      }
+
       // Don't auto-redirect - let student manually proceed
       setLaptopCameraReady(true);
     } catch (error) {
@@ -284,7 +313,7 @@ export default function ExamGettingReady() {
   };
 
   // Handle consent and start countdown
-  const handleConsentAndStart = () => {
+  const handleConsentAndStart = async () => {
     if (!consentGiven) {
       setError("You must give consent for camera monitoring to proceed");
       return;
@@ -293,6 +322,14 @@ export default function ExamGettingReady() {
     if (!laptopCameraReady || !phoneCameraReady) {
       setError("Both cameras must be working before starting the exam");
       return;
+    }
+    
+    // Ensure fullscreen before starting countdown
+    try {
+      await enterFullscreen();
+    } catch (error) {
+      console.warn('Fullscreen entry failed:', error);
+      // Continue anyway - fullscreen enforcement will happen via modal
     }
     
     setCurrentStep(4);
