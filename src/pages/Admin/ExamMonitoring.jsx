@@ -172,9 +172,9 @@ export default function ExamMonitoring({ examId: examIdProp }) {
           setStudents(prev => {
             const existing = prev.find(s => s.id === data.studentId);
             if (existing) {
-              return prev.map(s => s.id === data.studentId ? { ...s, connected: true } : s);
+              return prev.map(s => s.id === data.studentId ? { ...s, connected: true, laptopCamera: { active: true }, phoneCamera: s.phoneCamera } : s);
             }
-            return [...prev, { id: data.studentId, name: data.studentId, connected: true, laptopCamera: { active: false }, phoneCamera: { active: false } }];
+            return [...prev, { id: data.studentId, name: data.studentId, connected: true, laptopCamera: { active: true }, phoneCamera: { active: false } }];
           });
         });
 
@@ -254,19 +254,21 @@ export default function ExamMonitoring({ examId: examIdProp }) {
 
         // Audio communication events
         socketRef.current.on('student_audio_stream', (data) => {
-          console.log('Student audio stream received:', data.studentId);
+          console.log('Student audio stream received:', data.studentId, 'hasAudio:', !!data.audioData);
+          
           // Update audio status for the student
           setAudioStatus(prev => ({
             ...prev,
             [data.studentId]: {
               ...prev[data.studentId],
+              microphoneActive: true,
               audioLevel: data.audioLevel,
               lastUpdate: Date.now()
             }
           }));
 
-          // Play audio if audioData is present
-          if (data.audioData && selectedStudent?.id === data.studentId) {
+          // Play audio if audioData is present (play for all students, not just selected)
+          if (data.audioData) {
             playStudentAudio(data.studentId, data.audioData);
           }
         });
@@ -415,23 +417,31 @@ export default function ExamMonitoring({ examId: examIdProp }) {
       
       if (!audio) {
         audio = new Audio();
+        audio.volume = 1.0; // Full volume
         audioElementsRef.current[studentId] = audio;
+        console.log('Created new audio element for student:', studentId);
       }
       
-      // Stop any currently playing audio
-      audio.pause();
-      audio.currentTime = 0;
-      
-      // Set the new audio source
+      // For streaming audio chunks, we need to handle them differently
+      // Create a new audio blob and play it
       audio.src = base64Audio;
-      audio.play().catch(err => {
-        console.warn('Failed to play audio:', err);
-      });
       
-      // Clean up after audio finishes
-      audio.onended = () => {
-        // Keep the audio element for reuse
-      };
+      // Play immediately without stopping previous (for continuous streaming)
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Audio playing for student:', studentId);
+          })
+          .catch(err => {
+            console.warn('Failed to play audio:', err.message);
+            // Try to enable audio on user interaction
+            if (err.name === 'NotAllowedError') {
+              console.warn('Audio autoplay blocked. User interaction required.');
+            }
+          });
+      }
     } catch (error) {
       console.error('Error playing student audio:', error);
     }
@@ -521,7 +531,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
               </span>
             </div>
             <span className="text-sm text-gray-500">
-              {students.filter(s => s.connected).length} / {students.length} students online
+              {students.filter(s => s.connected).length} students online
             </span>
             <button
               onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
@@ -539,11 +549,11 @@ export default function ExamMonitoring({ examId: examIdProp }) {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                Students ({students.length})
+                Students ({students.filter(s => s.connected).length})
               </h2>
               
               <div className="space-y-3">
-                {students.map(student => (
+                {students.filter(s => s.connected).map(student => (
                   <div
                     key={student.id}
                     onClick={() => setSelectedStudent(student)}
