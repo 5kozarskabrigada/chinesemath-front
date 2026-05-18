@@ -13,6 +13,7 @@ class CameraService {
     this.isProctorSpeaking = false;
     this.hasCallRequest = false;
     this.callRequestTime = null;
+    this.studentId = null;
 
     this.peerId = null;
     this.isConnected = false;
@@ -56,6 +57,9 @@ class CameraService {
   // Initialize socket connection for real-time monitoring
   async initializeSocket(examId, studentId) {
     try {
+      // Store studentId for event filtering
+      this.studentId = studentId;
+      
       // Use environment variable or fallback to same-origin
       const baseURL = process.env.REACT_APP_API_URL || window.location.origin;
       
@@ -98,6 +102,9 @@ class CameraService {
 
       // Audio communication events
       this.socket.on('proctor_audio_start', (data) => {
+        // Only respond if this message is for us
+        if (data.studentId !== this.studentId) return;
+        
         console.log('Proctor started speaking');
         this.isProctorSpeaking = true;
         this.callbacks.onProctorCall?.(true);
@@ -105,6 +112,9 @@ class CameraService {
       });
 
       this.socket.on('proctor_audio_stop', (data) => {
+        // Only respond if this message is for us
+        if (data.studentId !== this.studentId) return;
+        
         console.log('Proctor stopped speaking');
         this.isProctorSpeaking = false;
         this.callbacks.onProctorCall?.(false);
@@ -112,6 +122,9 @@ class CameraService {
       });
 
       this.socket.on('microphone_toggle', (data) => {
+        // Only respond if this message is for us
+        if (data.studentId !== this.studentId) return;
+        
         console.log('Proctor toggled microphone:', data.muted);
         this.setMicrophoneMuted(data.muted);
         this.callbacks.onAudioStatusChange?.({ microphoneMuted: data.muted });
