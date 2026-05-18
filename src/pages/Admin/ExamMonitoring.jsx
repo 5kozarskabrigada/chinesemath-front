@@ -409,40 +409,32 @@ export default function ExamMonitoring({ examId: examIdProp }) {
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
-  // Audio Context for playback
-  const audioContextRef = useRef(null);
+  // Audio playback refs
   const proctorStreamRef = useRef(null);
   const proctorRecorderRef = useRef(null);
+  const studentAudioQueueRef = useRef({});
 
-  // Initialize audio context
-  useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
-
-  // Play student audio from base64 data
+  // Play student audio from base64 data using simple Audio element
   const playStudentAudio = async (studentId, base64Audio) => {
     try {
-      if (!audioContextRef.current) return;
+      // Create audio element for this chunk
+      const audio = new Audio(base64Audio);
+      audio.volume = 1.0;
       
-      // Convert base64 to blob
-      const response = await fetch(base64Audio);
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
+      // Play the audio chunk
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.debug('Audio chunk playback failed:', error.message);
+        });
+      }
       
-      // Decode and play
-      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      source.start(0);
+      // Clean up after playing
+      audio.onended = () => {
+        audio.src = '';
+      };
     } catch (error) {
-      // Silently fail - audio chunks may be incomplete or corrupted
-      console.debug('Audio playback skipped:', error.message);
+      console.debug('Audio playback error:', error.message);
     }
   };
 

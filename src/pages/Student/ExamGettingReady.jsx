@@ -51,6 +51,7 @@ export default function ExamGettingReady() {
   // Helper function to enter fullscreen
   const enterFullscreen = async () => {
     try {
+      console.log('[FULLSCREEN] Attempting to enter fullscreen');
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
       } else if (document.documentElement.webkitRequestFullscreen) {
@@ -58,9 +59,10 @@ export default function ExamGettingReady() {
       } else if (document.documentElement.msRequestFullscreen) {
         await document.documentElement.msRequestFullscreen();
       }
+      console.log('[FULLSCREEN] Fullscreen request sent');
       setShowFullscreenModal(false);
     } catch (error) {
-      console.warn('Fullscreen request failed:', error);
+      console.error('[FULLSCREEN] Request failed:', error);
       setError("Unable to enter fullscreen. Please press F11 or use the browser's fullscreen option.");
     }
   };
@@ -103,7 +105,7 @@ export default function ExamGettingReady() {
 
   // Enter fullscreen mode and monitor for exits
   useEffect(() => {
-    // Enter fullscreen on mount
+    // Enter fullscreen on mount (but might fail without user interaction)
     const initialFullscreen = async () => {
       await enterFullscreen();
       // After initial attempt, check if we're actually in fullscreen
@@ -114,8 +116,10 @@ export default function ExamGettingReady() {
           document.mozFullScreenElement ||
           document.msFullscreenElement
         );
+        console.log('[FULLSCREEN] Status check after mount:', isFullscreen);
         if (!isFullscreen) {
           // Not in fullscreen - show modal immediately
+          console.log('[FULLSCREEN] Not in fullscreen, showing modal');
           setShowFullscreenModal(true);
         }
       }, 500);
@@ -132,11 +136,15 @@ export default function ExamGettingReady() {
         document.msFullscreenElement
       );
       
+      console.log('[FULLSCREEN] Change detected, isFullscreen:', isFullscreen);
+      
       if (!isFullscreen) {
         // Exited fullscreen - always show modal
+        console.log('[FULLSCREEN] Exited, showing modal');
         setShowFullscreenModal(true);
       } else {
         // Entered fullscreen - hide modal
+        console.log('[FULLSCREEN] Entered, hiding modal');
         setShowFullscreenModal(false);
       }
     };
@@ -257,6 +265,7 @@ export default function ExamGettingReady() {
     setError(""); // Clear any previous errors
 
     try {
+      console.log('[CAMERA] Initializing laptop camera...');
       const stream = await CameraService.initializeLaptopCamera(selectedCamera);
 
       // Test camera functionality
@@ -266,12 +275,15 @@ export default function ExamGettingReady() {
         return;
       }
 
+      console.log('[CAMERA] Laptop camera initialized successfully');
+
       // Initialize microphone for proctor communication
       try {
+        console.log('[MIC] Initializing microphone...');
         await CameraService.initializeMicrophone();
-        console.log('Microphone initialized successfully');
+        console.log('[MIC] Microphone initialized successfully');
       } catch (micError) {
-        console.warn('Microphone initialization failed:', micError);
+        console.error('[MIC] Microphone initialization failed:', micError);
         // Don't block exam if microphone fails - it's optional
       }
 
@@ -804,7 +816,7 @@ export default function ExamGettingReady() {
       
       {/* Fullscreen Modal */}
       {showFullscreenModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center">
             <div className="mb-6">
               <Maximize className="w-16 h-16 text-red-600 mx-auto mb-4" />

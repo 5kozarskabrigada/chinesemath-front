@@ -142,25 +142,30 @@ class CameraService {
         // Only respond if this message is for us
         if (data.targetStudentId !== this.studentId) return;
         
+        console.log('[AUDIO] Received proctor audio stream');
+        
         try {
-          if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          // Create audio element and play immediately
+          const audio = new Audio(data.audioData);
+          audio.volume = 1.0;
+          
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log('[AUDIO] Playing proctor audio chunk');
+              })
+              .catch(error => {
+                console.warn('[AUDIO] Proctor audio playback failed:', error.message);
+              });
           }
           
-          // Convert base64 to blob
-          const response = await fetch(data.audioData);
-          const blob = await response.blob();
-          const arrayBuffer = await blob.arrayBuffer();
-          
-          // Decode and play
-          const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-          const source = this.audioContext.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(this.audioContext.destination);
-          source.start(0);
+          // Clean up after playing
+          audio.onended = () => {
+            audio.src = '';
+          };
         } catch (error) {
-          // Silently fail - audio chunks may be incomplete
-          console.debug('Proctor audio playback skipped:', error.message);
+          console.error('[AUDIO] Proctor audio error:', error);
         }
       });
 
