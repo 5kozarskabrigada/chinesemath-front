@@ -14,7 +14,8 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
-  XCircle
+  XCircle,
+  Maximize
 } from "lucide-react";
 import CameraService from "../../services/CameraService";
 import { apiGetExam, apiCheckExamStatus } from "../../api";
@@ -37,6 +38,7 @@ export default function ExamGettingReady() {
   const [consentGiven, setConsentGiven] = useState(false);
   const [testingCameras, setTestingCameras] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [showFullscreenModal, setShowFullscreenModal] = useState(false);
   
   // Refs
   const laptopVideoRef = useRef(null);
@@ -45,6 +47,23 @@ export default function ExamGettingReady() {
 
   // Phone camera URL for QR code
   const phoneURL = CameraService.generatePhoneURL(examId, user?.id || 'unknown');
+  
+  // Helper function to enter fullscreen
+  const enterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        await document.documentElement.msRequestFullscreen();
+      }
+      setShowFullscreenModal(false);
+    } catch (error) {
+      console.warn('Fullscreen request failed:', error);
+      setError("Unable to enter fullscreen. Please press F11 or use the browser's fullscreen option.");
+    }
+  };
 
   // Load exam data and check status
   useEffect(() => {
@@ -82,23 +101,37 @@ export default function ExamGettingReady() {
     loadExamData();
   }, [examId, navigate]);
 
-  // Enter fullscreen mode
+  // Enter fullscreen mode and monitor for exits
   useEffect(() => {
-    const enterFullscreen = async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          await document.documentElement.webkitRequestFullscreen();
-        } else if (document.documentElement.msRequestFullscreen) {
-          await document.documentElement.msRequestFullscreen();
-        }
-      } catch (error) {
-        console.warn('Fullscreen request failed:', error);
+    // Enter fullscreen on mount
+    enterFullscreen();
+    
+    // Monitor fullscreen changes
+    const handleFullscreenChange = () => {
+      const isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      
+      if (!isFullscreen) {
+        // Exited fullscreen - show modal
+        setShowFullscreenModal(true);
       }
     };
-
-    enterFullscreen();
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
   }, []);
 
   // Initialize camera service
@@ -731,6 +764,38 @@ export default function ExamGettingReady() {
           </div>
         )}
       </div>
+      
+      {/* Fullscreen Modal */}
+      {showFullscreenModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center">
+            <div className="mb-6">
+              <Maximize className="w-16 h-16 text-red-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                Fullscreen Required
+              </h2>
+              <p className="text-gray-600 mb-2">
+                For exam security, you must remain in fullscreen mode.
+              </p>
+              <p className="text-sm text-gray-500">
+                Click the button below to return to fullscreen and continue your exam setup.
+              </p>
+            </div>
+            
+            <button
+              onClick={enterFullscreen}
+              className="w-full px-6 py-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold text-lg flex items-center justify-center gap-3"
+            >
+              <Maximize className="w-6 h-6" />
+              Enter Fullscreen
+            </button>
+            
+            <p className="mt-4 text-xs text-gray-500">
+              You can also press <kbd className="px-2 py-1 bg-gray-200 rounded font-mono">F11</kbd> on your keyboard
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
