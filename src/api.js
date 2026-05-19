@@ -103,6 +103,30 @@ export async function apiGetSubmissionDetail(submissionId) {
   return request(`/api/admin/submissions/${submissionId}`);
 }
 
+export async function apiDownloadSubmissionPDF(submissionId) {
+  const token = localStorage.getItem("token");
+  const response = await fetch(`/api/admin/submissions/${submissionId}/pdf`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to download PDF");
+  }
+  
+  const blob = await response.blob();
+  return blob;
+}
+
+export async function apiEmailSubmissionPDF(submissionId) {
+  return request(`/api/admin/submissions/${submissionId}/email`, { 
+    method: "POST" 
+  });
+}
+
 export async function apiGetUsers() {
   return request("/api/admin/users");
 }

@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
-import { apiGetSubmissionDetail } from "../../api";
+import { apiGetSubmissionDetail, apiDownloadSubmissionPDF, apiEmailSubmissionPDF } from "../../api";
 import {
   ArrowLeft, CheckCircle, XCircle, Download, Loader2,
-  User, Clock, FileText, Award, X
+  User, Clock, FileText, Award, X, Mail
 } from "lucide-react";
 import { renderMath } from "../../utils/math";
 import html2pdf from "html2pdf.js";
@@ -35,6 +35,8 @@ export default function AdminSubmissionDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [emailingPdf, setEmailingPdf] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const pdfContentRef = useRef(null);
 
@@ -47,6 +49,50 @@ export default function AdminSubmissionDetail() {
 
   const handleDownloadPdf = () => {
     setShowPdfPreview(true);
+  };
+  
+  const handleDownloadPdfDirect = async () => {
+    setDownloadingPdf(true);
+    try {
+      const blob = await apiDownloadSubmissionPDF(submissionId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `exam-results-${data.submission.exam_title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+      alert(err.message || "Failed to download PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleEmailPdf = async () => {
+    if (!data.submission.email || data.submission.email.includes('@placeholder.local')) {
+      alert("No valid email address for this student. Cannot send email.");
+      return;
+    }
+    
+    if (!window.confirm(`Send exam results to ${data.submission.email}?`)) {
+      return;
+    }
+    
+    setEmailingPdf(true);
+    setEmailSuccess(false);
+    try {
+      await apiEmailSubmissionPDF(submissionId);
+      setEmailSuccess(true);
+      setTimeout(() => setEmailSuccess(false), 3000);
+    } catch (err) {
+      console.error("Email failed:", err);
+      alert(err.message || "Failed to send email");
+    } finally {
+      setEmailingPdf(false);
+    }
   };
 
   const handleConfirmPdf = async () => {
@@ -107,14 +153,28 @@ export default function AdminSubmissionDetail() {
             <ArrowLeft size={16} />
             <span>Back to Submissions</span>
           </button>
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
-          >
-            {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            {downloadingPdf ? "Generating..." : "Download PDF"}
-          </button>
+          <div className="flex items-center gap-3">
+            {emailSuccess && (
+              <span className="text-sm text-green-600 font-medium">✓ Email sent!</span>
+            )}
+            <button
+              onClick={handleEmailPdf}
+              disabled={emailingPdf || !data.submission.email || data.submission.email.includes('@placeholder.local')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
+              title={!data.submission.email || data.submission.email.includes('@placeholder.local') ? "No valid email address" : "Send results via email"}
+            >
+              {emailingPdf ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+              {emailingPdf ? "Sending..." : "Email Results"}
+            </button>
+            <button
+              onClick={handleDownloadPdfDirect}
+              disabled={downloadingPdf}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
+            >
+              {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {downloadingPdf ? "Generating..." : "Download PDF"}
+            </button>
+          </div>
         </div>
 
         {/* Header Card */}

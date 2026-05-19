@@ -7,7 +7,15 @@ export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", username: "", password: "", role: "student" });
+  const [form, setForm] = useState({ 
+    email: "", 
+    first_name: "", 
+    last_name: "", 
+    username: "", 
+    password: "", 
+    role: "student",
+    sendEmail: true 
+  });
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState(null); // To show after user creation
@@ -38,7 +46,15 @@ export default function AdminUsers() {
         setShowModal(false);
       }
       
-      setForm({ email: "", first_name: "", last_name: "", username: "", password: "", role: "student" });
+      setForm({ 
+        email: "", 
+        first_name: "", 
+        last_name: "", 
+        username: "", 
+        password: "", 
+        role: "student",
+        sendEmail: true 
+      });
       load();
     } catch (err) {
       setFormError(err.message);
@@ -167,6 +183,19 @@ export default function AdminUsers() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Email (optional)</label>
                 <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="student@school.edu" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500 outline-none bg-gray-50 focus:bg-white" />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input 
+                  type="checkbox" 
+                  id="sendEmail"
+                  checked={form.sendEmail} 
+                  onChange={e => setForm(f => ({...f, sendEmail: e.target.checked}))} 
+                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                  disabled={!form.email || form.email.includes('@placeholder.local')}
+                />
+                <label htmlFor="sendEmail" className="text-xs text-gray-600">
+                  Send login credentials via email {!form.email && <span className="text-gray-400">(requires email)</span>}
+                </label>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Username (Leave empty to auto-generate)</label>
