@@ -58,7 +58,41 @@ Backend packages (already installed via npm install):
 
 ### Step 1: Backend Environment Variables
 
-Add these to your `backend/.env` file:
+⚠️ **IMPORTANT**: Never commit `.env` files! Use environment variables or secrets management.
+
+#### Option A: Set Environment Variables Directly (Recommended for Production)
+
+**On Linux/Mac:**
+```bash
+export EMAIL_HOST=smtp.office365.com
+export EMAIL_PORT=587
+export EMAIL_SECURE=false
+export EMAIL_USER=info@examroomedu.com
+export EMAIL_PASSWORD=your_actual_password_here
+```
+
+**On Windows (PowerShell):**
+```powershell
+$env:EMAIL_HOST="smtp.office365.com"
+$env:EMAIL_PORT="587"
+$env:EMAIL_SECURE="false"
+$env:EMAIL_USER="info@examroomedu.com"
+$env:EMAIL_PASSWORD="your_actual_password_here"
+```
+
+**Using PM2 (recommended for persistent deployment):**
+```bash
+pm2 start server.js --name backend --update-env -- \
+  EMAIL_HOST=smtp.office365.com \
+  EMAIL_PORT=587 \
+  EMAIL_SECURE=false \
+  EMAIL_USER=info@examroomedu.com \
+  EMAIL_PASSWORD=your_actual_password_here
+```
+
+#### Option B: Local `.env` File (Development Only)
+
+Only if using locally and `.env` is in `.gitignore`:
 
 ```env
 # Email Configuration (Microsoft 365 / Office 365)
@@ -67,6 +101,11 @@ EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_USER=info@examroomedu.com
 EMAIL_PASSWORD=your_actual_password_here
+```
+
+**Verify `.env` is excluded from git:**
+```bash
+git check-ignore backend/.env  # Should output: backend/.env
 ```
 
 ### Step 2: Microsoft 365 Account Setup
@@ -89,18 +128,28 @@ EMAIL_PASSWORD=your_actual_password_here
      - Under "App passwords", create new password
      - Use this password in EMAIL_PASSWORD
 
-### Step 3: Restart Backend Server
+### Step 3: Start/Restart Backend Server
 
-After updating `.env`, restart your backend server:
+**Using PM2 with environment variables:**
+```bash
+cd backend
+pm2 start server.js --name backend --update-env -- \
+  EMAIL_HOST=smtp.office365.com \
+  EMAIL_PORT=587 \
+  EMAIL_SECURE=false \
+  EMAIL_USER=info@examroomedu.com \
+  EMAIL_PASSWORD=your_actual_password_here
+```
 
+**Or restart if already running:**
+```bash
+pm2 restart backend --update-env
+```
+
+**Or using npm (for development):**
 ```bash
 cd backend
 npm start
-```
-
-Or if using PM2:
-```bash
-pm2 restart backend
 ```
 
 ---
@@ -252,12 +301,18 @@ Open `result.pdf` to verify formatting.
 
 ## 🔐 Security Notes
 
-- Never commit `.env` file to git (already in .gitignore)
+- **NEVER commit `.env` files or credentials to git**
+- Use environment variables or secrets management in production
 - Use app-specific passwords for MFA-enabled accounts
 - Regularly rotate email passwords
 - Monitor email sending limits (Microsoft 365: 10,000/day)
 - Validate email addresses before sending
 - Sanitize user inputs in email templates
+- Consider using secrets management tools:
+  - PM2 ecosystem file with environment variables
+  - Docker secrets
+  - Cloud provider secrets (AWS Secrets Manager, Azure Key Vault)
+  - HashiCorp Vault
 
 ---
 
