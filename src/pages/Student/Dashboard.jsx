@@ -22,9 +22,7 @@ export default function StudentDashboard() {
       <header className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow">
-              <span className="text-white text-lg font-bold">M</span>
-            </div>
+            <img src={`${process.env.PUBLIC_URL}/savad-logo.png`} alt="SAVAD" className="h-9 w-auto object-contain" draggable={false} />
             <div>
               <p className="font-bold text-gray-900 text-sm">Chinese Math</p>
               <p className="text-xs text-gray-500">Welcome, {user?.first_name} {user?.last_name}</p>

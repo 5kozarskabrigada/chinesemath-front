@@ -185,13 +185,26 @@ class CameraService {
 
       this.socket.on('call_request_response', (data) => {
         console.log('Call request response:', data);
+        // The server broadcasts this to the whole exam room, so every other handler above filters
+        // on studentId. This one did not: when the proctor answered ONE student, every student in
+        // the exam was told their call was accepted and had their own pending request cleared —
+        // so a student still waiting saw their raised hand silently vanish.
+        if (data.studentId !== this.studentId) return;
+
+        this.hasCallRequest = false;
+        this.callRequestTime = null;
+
+        // Clear the pending-request UI too. Only the internal flag was reset before, so the call
+        // button stayed stuck in its "cancel" state after the proctor answered — the student had
+        // to press it again to unstick it. Fire this BEFORE onProctorCall so the status message
+        // below is what remains on screen.
+        this.callbacks.onCallRequest?.(false);
+
         if (data.accepted) {
           this.callbacks.onProctorCall?.(true, 'Call accepted by proctor');
         } else {
           this.callbacks.onProctorCall?.(false, 'Call dismissed by proctor');
         }
-        this.hasCallRequest = false;
-        this.callRequestTime = null;
       });
 
       // Return true even if socket fails - exam can continue without monitoring
@@ -359,6 +372,26 @@ class CameraService {
     }
   }
 
+  // Size the snapshot canvas to the camera's REAL aspect ratio, long edge capped at maxEdge.
+  // Both streams used to draw into a fixed 320x240 (4:3) box, which stretched every frame to fit:
+  // a phone held portrait reports 720x1280, so the desk view arrived at the proctor squashed flat
+  // and was then cropped again by the 16:9 tile. Re-checked each frame so rotating the phone
+  // re-fits instead of distorting. Returns false until the video reports its dimensions.
+  fitCanvasToVideo(canvas, video, maxEdge = 320) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return false;
+
+    const scale = Math.min(maxEdge / vw, maxEdge / vh, 1);
+    const w = Math.max(1, Math.round(vw * scale));
+    const h = Math.max(1, Math.round(vh * scale));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    return true;
+  }
+
   // Start streaming laptop camera to admin via JPEG snapshots
   startLaptopStreaming() {
     if (!this.laptopStream || !this.socket) return;
@@ -369,14 +402,13 @@ class CameraService {
     video.play();
 
     const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 240;
     const ctx = canvas.getContext('2d');
 
     this.laptopSnapshotInterval = setInterval(() => {
       if (!this.socket || !this.isConnected || !this.laptopStream) return;
       try {
-        ctx.drawImage(video, 0, 0, 320, 240);
+        if (!this.fitCanvasToVideo(canvas, video)) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
         this.socket.emit('camera_stream', {
           cameraType: 'laptop',
@@ -402,14 +434,13 @@ class CameraService {
     video.play();
 
     const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 240;
     const ctx = canvas.getContext('2d');
 
     this.phoneSnapshotInterval = setInterval(() => {
       if (!this.socket || !this.isConnected || !this.phoneStream) return;
       try {
-        ctx.drawImage(video, 0, 0, 320, 240);
+        if (!this.fitCanvasToVideo(canvas, video)) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
         this.socket.emit('phone_camera_stream', {
           data: dataUrl,

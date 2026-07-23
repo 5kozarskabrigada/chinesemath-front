@@ -53,9 +53,7 @@ export default function AdminLayout({ children }) {
         <div className={`border-b border-gray-100 flex items-center ${collapsed ? "p-3 justify-center" : "p-4 justify-between"}`}>
           {!collapsed && (
             <div className="flex items-center space-x-3 min-w-0">
-              <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center shadow shrink-0">
-                <span className="text-white text-base font-bold">M</span>
-              </div>
+              <img src={`${process.env.PUBLIC_URL}/savad-logo.png`} alt="SAVAD" className="h-8 w-auto object-contain shrink-0" draggable={false} />
               <div className="min-w-0">
                 <p className="font-bold text-gray-900 text-sm truncate">Chinese Math</p>
                 <p className="text-xs text-gray-500">Admin Console</p>
@@ -63,9 +61,7 @@ export default function AdminLayout({ children }) {
             </div>
           )}
           {collapsed && (
-            <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center shadow">
-              <span className="text-white text-base font-bold">M</span>
-            </div>
+            <img src={`${process.env.PUBLIC_URL}/savad-mark.png`} alt="SAVAD" className="w-9 h-9 object-contain" draggable={false} />
           )}
           {!collapsed && (
             <button

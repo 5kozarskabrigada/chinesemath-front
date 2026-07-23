@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
-import { apiGetSubmissionDetail, apiDownloadSubmissionPDF, apiEmailSubmissionPDF } from "../../api";
+import { apiGetSubmissionDetail, apiEmailSubmissionPDF } from "../../api";
 import {
   ArrowLeft, CheckCircle, XCircle, Download, Loader2,
   User, Clock, FileText, Award, X, Mail
@@ -47,28 +47,13 @@ export default function AdminSubmissionDetail() {
       .finally(() => setLoading(false));
   }, [submissionId]);
 
+  // Opens the preview below, which renders the report and exports it with html2pdf.
+  // This used to call GET /api/admin/submissions/:id/pdf, but that route does not exist on the
+  // backend (there is no PDF renderer there at all), so every download 404'd — and because the
+  // 404 body is Express's HTML page, the client's response.json() threw a parse error on top,
+  // hiding the real cause. The preview + html2pdf path was already written here and unused.
   const handleDownloadPdf = () => {
     setShowPdfPreview(true);
-  };
-  
-  const handleDownloadPdfDirect = async () => {
-    setDownloadingPdf(true);
-    try {
-      const blob = await apiDownloadSubmissionPDF(submissionId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `exam-results-${data.submission.exam_title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error("PDF download failed:", err);
-      alert(err.message || "Failed to download PDF");
-    } finally {
-      setDownloadingPdf(false);
-    }
   };
 
   const handleEmailPdf = async () => {
@@ -167,7 +152,7 @@ export default function AdminSubmissionDetail() {
               {emailingPdf ? "Sending..." : "Email Results"}
             </button>
             <button
-              onClick={handleDownloadPdfDirect}
+              onClick={handleDownloadPdf}
               disabled={downloadingPdf}
               className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
             >

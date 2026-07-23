@@ -774,7 +774,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
                             </div>
                             <div className="relative bg-gray-900 rounded overflow-hidden aspect-video">
                               {frames.phone ? (
-                                <img src={frames.phone} alt={`${student.name} phone`} className="w-full h-full object-cover" />
+                                <img src={frames.phone} alt={`${student.name} phone`} className="w-full h-full object-contain" />
                               ) : (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                   <Smartphone className="w-6 h-6 text-gray-600" />
@@ -921,7 +921,7 @@ export default function ExamMonitoring({ examId: examIdProp }) {
                         <img
                           src={phoneFrame}
                           alt="Phone camera"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center">

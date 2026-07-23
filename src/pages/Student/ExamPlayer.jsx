@@ -231,6 +231,12 @@ export default function ExamPlayer() {
                 onProctorCall: (active, message) => {
                   if (active) {
                     setCallStatus(message || 'Proctor is speaking');
+                  } else if (message) {
+                    // A dismissal arrives as active=false but WITH a message. Clearing the status
+                    // outright meant a declined student got no feedback at all — pressing "call"
+                    // looked like it did nothing. Show the reason, then fade it.
+                    setCallStatus(message);
+                    setTimeout(() => setCallStatus(''), 5000);
                   } else {
                     setCallStatus('');
                   }

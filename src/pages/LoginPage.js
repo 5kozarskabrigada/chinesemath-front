@@ -37,9 +37,12 @@ export default function LoginPage() {
 
       <div className="bg-white p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md relative z-10 border border-gray-100">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg transform rotate-3">
-            <span className="text-white text-2xl font-bold">M</span>
-          </div>
+          <img
+            src={`${process.env.PUBLIC_URL}/savad-logo.png`}
+            alt="SAVAD"
+            className="h-12 w-auto object-contain mx-auto mb-4"
+            draggable={false}
+          />
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome Back</h2>
           <p className="text-gray-500 mt-2">Chinese Math Exam Platform</p>
         </div>
