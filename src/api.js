@@ -107,9 +107,11 @@ export async function apiGetSubmissionDetail(submissionId) {
 // backend never implemented, and read localStorage "token" instead of "math_token" so it was
 // unauthenticated too. The report is now rendered and exported client-side in SubmissionDetail.
 
-export async function apiEmailSubmissionPDF(submissionId) {
-  return request(`/api/admin/submissions/${submissionId}/email`, { 
-    method: "POST" 
+// The PDF is rendered on the client and posted as base64; the server only attaches and sends it.
+export async function apiEmailSubmissionPDF(submissionId, { pdfBase64, filename } = {}) {
+  return request(`/api/admin/submissions/${submissionId}/email`, {
+    method: "POST",
+    body: JSON.stringify({ pdfBase64, filename }),
   });
 }
 

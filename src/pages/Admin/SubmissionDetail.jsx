@@ -56,28 +56,29 @@ export default function AdminSubmissionDetail() {
     setShowPdfPreview(true);
   };
 
-  const handleEmailPdf = async () => {
-    if (!data.submission.email || data.submission.email.includes('@placeholder.local')) {
-      alert("No valid email address for this student. Cannot send email.");
-      return;
-    }
-    
-    if (!window.confirm(`Send exam results to ${data.submission.email}?`)) {
-      return;
-    }
-    
-    setEmailingPdf(true);
-    setEmailSuccess(false);
-    try {
-      await apiEmailSubmissionPDF(submissionId);
-      setEmailSuccess(true);
-      setTimeout(() => setEmailSuccess(false), 3000);
-    } catch (err) {
-      console.error("Email failed:", err);
-      alert(err.message || "Failed to send email");
-    } finally {
-      setEmailingPdf(false);
-    }
+  // Emailing renders the SAME document the admin is previewing, so it needs the preview mounted.
+  // Opening it here means both actions share one flow: preview, then download or send.
+  const handleEmailPdf = () => {
+    setShowPdfPreview(true);
+  };
+
+  const buildPdfOptions = () => {
+    const { submission: sub } = data;
+    const studentName = `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || sub.username || "Unknown";
+    const examTitle = sub.exam_title || "Exam";
+    const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
+
+    return {
+      filename,
+      opt: {
+        margin: 10,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      },
+    };
   };
 
   const handleConfirmPdf = async () => {
@@ -85,20 +86,7 @@ export default function AdminSubmissionDetail() {
     setDownloadingPdf(true);
 
     try {
-      const { submission: sub } = data;
-      const studentName = `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || sub.username || "Unknown";
-      const examTitle = sub.exam_title || "Exam";
-      const filename = `${studentName.replace(/\s+/g, "_")}_${examTitle.replace(/\s+/g, "_")}_Results.pdf`;
-
-      const opt = {
-        margin: 10,
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-
+      const { opt } = buildPdfOptions();
       await html2pdf().set(opt).from(pdfContentRef.current).save();
       setShowPdfPreview(false);
     } catch (err) {
@@ -106,6 +94,34 @@ export default function AdminSubmissionDetail() {
       alert("Failed to generate PDF. Please try again.");
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const handleConfirmEmail = async () => {
+    if (!pdfContentRef.current) return;
+
+    const to = data.submission.email;
+    if (!to || to.includes('@placeholder.local')) {
+      alert("No valid email address for this student. Cannot send email.");
+      return;
+    }
+    if (!window.confirm(`Send exam results to ${to}?`)) return;
+
+    setEmailingPdf(true);
+    setEmailSuccess(false);
+    try {
+      const { opt, filename } = buildPdfOptions();
+      // datauristring gives us base64 straight out; the server re-checks the %PDF header.
+      const pdfBase64 = await html2pdf().set(opt).from(pdfContentRef.current).outputPdf('datauristring');
+      await apiEmailSubmissionPDF(submissionId, { pdfBase64, filename });
+      setEmailSuccess(true);
+      setShowPdfPreview(false);
+      setTimeout(() => setEmailSuccess(false), 4000);
+    } catch (err) {
+      console.error("Email failed:", err);
+      alert(err.message || "Failed to send email");
+    } finally {
+      setEmailingPdf(false);
     }
   };
 
@@ -386,8 +402,17 @@ export default function AdminSubmissionDetail() {
                 Cancel
               </button>
               <button
+                onClick={handleConfirmEmail}
+                disabled={emailingPdf || downloadingPdf || !data.submission.email || data.submission.email.includes('@placeholder.local')}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center gap-2"
+                title={!data.submission.email || data.submission.email.includes('@placeholder.local') ? "No valid email address" : `Send to ${data.submission.email}`}
+              >
+                {emailingPdf ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                {emailingPdf ? "Sending..." : "Email to Student"}
+              </button>
+              <button
                 onClick={handleConfirmPdf}
-                disabled={downloadingPdf}
+                disabled={downloadingPdf || emailingPdf}
                 className="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-60 transition flex items-center gap-2"
               >
                 {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
